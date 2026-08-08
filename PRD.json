@@ -1,37 +1,283 @@
 {
-  "project": "Zarathustra — real money-movement lanes (Rain sandbox + Monad x402)",
+  "_read_me_first": "This file is the WHAT and the WHOLE MAP. prompt.md is the HOW. Every Ralph iteration starts from a fresh context with no memory of the last one — this file plus LOOP.md is all it knows. Never delete a section to make room; append.",
+
+  "project": "Project Zarathustra — a dollar-weighted exposure gauge for agent payments, running on Rain's card sandbox and Monad testnet x402.",
+  "repo": "project-z (public) — the Ralph loop runs here. z-draft is the private prep/anchor repo; ANCHOR.md there is the known-good manifest.",
   "branch": "feat/live-settlement",
-  "invariants": [
-    "golden path stays mock + deterministic: node run.mjs reproduces Avesta head e5acaa05382d",
-    "node --test green (48, incl the golden tripwire)",
-    "FROZEN: src/engine.mjs, src/avesta.mjs, src/x402mock.mjs, and all test/* except golden.test.mjs",
-    "live is OPT-IN; tests run keys-unset and fully offline",
-    "push after EVERY green commit (loop runs on Carson's machine — remote monitoring)"
+  "event": "Rain x Monad hackathon, NYC, Aug 8-9 2026.",
+  "judging": {
+    "primary": "Rain first prize — agentic commerce. What wins it: agents that ACTUALLY move money on Rain's sandbox, plus a risk number no other team has.",
+    "secondary": "Monad bounty, Best Implementation — a real on-chain x402 settlement plus a Monad-specific measurement (the speculative-to-final window) that only makes sense on a parallel-EVM L1.",
+    "framing": "Rain = stablecoin card-issuing platform. Monad = high-performance parallel-EVM L1. NEVER say 'crypto coin'."
+  },
+
+  "thesis": {
+    "one_line": "A scoped card blocks the obvious attack; it cannot tell a legitimate $42 buy from a prompt-injected $42 buy to a different merchant in the SAME allowed category. That in-policy residual is invisible to a static control because it IS in-policy. Zarathustra prices it in dollars.",
+    "positioning": "A GAUGE, not a firewall. We do not block; we measure what the controls that already ship let through, so a buyer can size the risk. Never pitch this as a defense product — it is instrumentation.",
+    "the_number": "dollars-at-risk = frequency x dollars x reversibility (FAIR / event-based Cyber-VaR). The product IS the re-rank: an attack ranked #5 by binary success-rate ranks #1 by dollars.",
+    "the_floor": "Tighten the cap and the attacker's take falls but converges to a NON-ZERO floor ($19.99 in the mock) — the residual a static rule cannot close without also blocking honest buys. That floor is where an intent-aware layer earns a place.",
+    "honesty_rule": "Both possible live outcomes are publishable. If Rain's sandbox waves the flip through, the residual is confirmed. If it declines, the card binds the exact merchant and we say so and report the CAPTURE-DRIFT residual instead. Fabricating the friendlier outcome is the only losing move."
+  },
+
+  "concepts": {
+    "in_policy_flip": "Under the cap, inside the allowed merchant-category, but a DIFFERENT merchant than the mandate intended. The headline attack. Mock figure: $49.97 past a $50 cap.",
+    "capture_drift": "A second residual: the cap gates the AUTHORIZATION; the capture is a later, separate event. Authorize $10.00, capture $42.98 — if the capture is not re-checked against the cap, the drift rides the auth/clearing split.",
+    "exposure_floor": "$19.99 in the mock — the dollars still slipping at the tightest usable cap.",
+    "asha": "src/asha.mjs — the reference GATE. A commodity static policy (Rain-ACL style): amounts, recipients, rates. Never intent. This is the BASELINE we measure, not the contribution.",
+    "druj": "src/druj.mjs — the evolutionary FUZZER. MAP-Elites over injected-but-in-policy purchases, fitness = dollars moved x severity. Finds the maximum-dollar bypass a gate waves through.",
+    "rashnu": "src/rashnu.mjs — the SCORER. Ranks by dollars-at-risk x reversibility rather than binary attack-success-rate. Owns the re-rank that is the product.",
+    "avesta": "src/avesta.mjs — the tamper-evident LEDGER. A local hash chain of every verdict; head e5acaa05382d on the golden path. Swappable to on-chain.",
+    "oracle": "src/oracle.mjs — the severity oracle. Grades on funds ACTUALLY MOVED, not on whether text looked jailbroken. L4+ = settled funds outside the mandate. It alone owns severity; no other module may fabricate a level.",
+    "reversibility": "How much of a moved dollar is recoverable. On Monad it is grounded in the real speculative-to-final window (milestone B4), not assumed. Until measured, the weights are ASSUMED and must be labelled as such.",
+    "mandate_vs_policy": "The mandate is what the human intended to buy. The policy is what the card permits. The gap between them is the whole attack surface."
+  },
+
+  "surface": {
+    "_note": "Every module, page and output that exists TODAY. The loop EXTENDS this; it never re-invents a module that is already here and never edits a frozen one. Read the header comment of any file before touching it.",
+    "core_modules": {
+      "src/types.mjs": "Shared vocabulary — TACTICS, LAYERS, LEVELS, REVERSIBILITY_DEFAULTS. Frozen enums, zero runtime behavior.",
+      "src/engine.mjs": "FROZEN. DEMO_ALLOWLIST / DEMO_MANDATE / DEMO_POLICY and the single-step demo engine.",
+      "src/asha.mjs": "makeAsha — the baseline gate.",
+      "src/druj.mjs": "randomSearch / runTactic / evolveArchive — the fuzzer.",
+      "src/rashnu.mjs": "score — dollar-weighted ranking.",
+      "src/avesta.mjs": "FROZEN. GENESIS / hashEntry / verifyChain / makeLedger.",
+      "src/oracle.mjs": "grade — verified-effect severity.",
+      "src/agent.mjs": "makeAgent — pluggable buyer agent. Default is a deterministic RULE STUB (no API key, always runs) that obeys an injection by construction, so the MEASUREMENT is validated without an LLM in the loop. Optional Anthropic backend.",
+      "src/injection.mjs": "CORPUS / makeEnv / extractProposed — the agent's untrusted read surface (merchant pages, tool responses), including the in-allowlist-out-of-mandate swap.",
+      "src/corpus.mjs": "CORPUS / corpusByLayer — the fused attack corpus.",
+      "src/profiles.mjs": "PROFILES / PROFILE_ORDER — tight / loose / no-gate. The caps are the knob that makes success-rate genuinely differ, so the re-rank is real and not staged.",
+      "src/harness.mjs": "runBenchmark — runs the corpus across profiles.",
+      "src/coevolve.mjs": "gate-vs-fuzzer co-evolution.",
+      "src/rng.mjs": "rng — seeded mulberry32. Every run is reproducible.",
+      "src/report.mjs": "renderReport / writeReport — pure HTML report generator over one runData object.",
+      "src/x402mock.mjs": "FROZEN. makeFacilitator({reorgRate, rand}) -> verify(p):bool, settle(p):{settled,reverted,moved}. Seeded and deterministic — this is the golden path.",
+      "src/x402live.mjs": "makeLiveFacilitator({rpcUrl,privateKey,usdc,facilitatorUrl,maxUsdc}) — same seam plus txHash. EIP-3009 transferWithAuthorization via viem. finalityToReversibility is a HUMAN-REVIEWED mapping, never auto-wired.",
+      "src/rainsandbox.mjs": "makeRainSandbox({apiBase,apiKey,userId,teamId,contractId,sessionId}) -> fundCollateral, issueScopedCard, authorize, settleTx, transactions, paymentRoutes, and facilitatorFor(cardId) -> {verify,settle} (the same seam as the mock)."
+    },
+    "seams": "The three facilitators share ONE interface: verify(p) -> bool, settle(p) -> {settled, reverted, moved}. Mock, Monad-live and Rain-live are drop-in for each other. NEVER break this shape — it is what lets the gauge run on real rails without touching the engine.",
+    "entrypoints": {
+      "node run.mjs": "The gauge. Mock, seeded, offline. Prints BASELINE -> DRUJ -> HARNESS -> RASHNU -> AVESTA head -> HEADLINE, writes dist/report.html. Do NOT run this inside the loop; the golden tripwire already pins its output.",
+      "node --test": "48 tests, zero runtime dependencies, fully offline, keys unset.",
+      "node --env-file=.env.local rain.mjs --check|--demo": "Rain sandbox. --demo is the pitch: fund collateral -> issue scoped card (cap $42.99, allowedMccs 5812) -> POSITIVE $15 in-MCC -> FLIP $42.97 same-MCC wrong-merchant -> NEGATIVE $15 out-of-MCC -> CAPTURE-DRIFT auth $10.00 then capture $42.98 -> read back GET transactions.",
+      "node --env-file=.env.local live.mjs --check|--dry-run|--live": "Monad x402. --live requires ZARA_LIVE=1 and sends exactly ONE settlement, then measures finality and writes dist/finality.json.",
+      "node verify.mjs gate|status|<ID>": "The machine gate. See loop.gates."
+    },
+    "pages": {
+      "docs/index.html": "Visual-work index — links the other pages.",
+      "docs/catalog.html": "Design catalog / visual system (442 lines) — tokens, type scale, components. The style source of truth for any new page.",
+      "docs/sample.html": "The narrative pitch page: 'the gauge, not a firewall' (428 lines).",
+      "docs/touhou.html": "Alternate full pitch treatment — 'Agent-Payment Exposure Gauge' (429 lines).",
+      "docs/gauge.html": "The buyer-facing gauge view (145 lines) — the exposure number as a buyer reads it.",
+      "docs/report.html": "'Thus Spoke the Ledger' — the ledger/report shell.",
+      "rule": "docs/* is HUMAN-OWNED. The loop does NOT edit, restyle or add pages. If a live number belongs on a page, the loop writes it to evidence/ and records the request in LOOP.md under 'for the human'."
+    },
+    "outputs": {
+      "dist/report.html": "Generated by run.mjs. gitignored.",
+      "dist/finality.json": "Generated by live.mjs --live. gitignored — so B4 must ALSO copy its facts into evidence/B4.json, which is tracked.",
+      "evidence/*.json": "TRACKED. The loop's proof-of-work. One file per milestone. Never contains a key, a signature or a seed phrase.",
+      "LOOP.md": "TRACKED. The loop's only memory across iterations.",
+      "BLOCKED.md": "gitignored — a note for the human at the desk ONLY. It is invisible to the remote monitor, so blocking must ALSO be recorded in LOOP.md and PRD milestone status."
+    }
+  },
+
+  "loop": {
+    "model": "Ralph: a fresh agent, fresh context, one iteration at a time, re-reading prompt.md + PRD.json + LOOP.md each time. It remembers NOTHING else. Every fact the next iteration needs must be committed to a tracked file before this one exits.",
+    "state_files": {
+      "LOOP.md": "Append-only journal, tracked, one block per iteration, exact format in prompt.md. Derived counters: iterations = count of '## iter' blocks; strikes = count of 'result: STRIKE' since the most recent 'result: PASS'.",
+      "PRD.json milestone.status": "Updated IN THE SAME COMMIT as the evidence. One of: todo | in-progress | blocked:<what is missing> | verified:<ISO timestamp>.",
+      "evidence/<ID>.json": "The facts the verifier asserts on. Written from a REAL run, never by hand."
+    },
+    "budgets": { "max_iterations": 25, "max_consecutive_strikes": 3, "milestones_per_iteration": 1, "max_new_files_per_iteration": 3 },
+    "strike_is": [
+      "the milestone's verify exited non-zero",
+      "node verify.mjs gate exited non-zero",
+      "the iteration produced no commit (a no-op)",
+      "a frozen file changed",
+      "verify.mjs sha256 does not match the value pinned in prompt.md"
+    ],
+    "done_is": "node verify.mjs <ID> exits 0 AND node verify.mjs gate exits 0. The exit code decides, not the agent. Paste both stdouts into LOOP.md.",
+    "blocked_is": "A milestone whose prerequisite (a credential, a funded wallet, a dependency the human must install) is absent. Block the MILESTONE, not the loop: set status blocked:<what>, write evidence/BLOCKED-<ID>.json, and move to the next eligible milestone IN EITHER LANE. Only when every remaining milestone is blocked AND the improve backlog is empty does the loop stop.",
+    "gates": {
+      "exit_gate": "node verify.mjs gate",
+      "milestone": "node verify.mjs <ID>",
+      "roster": "node verify.mjs status",
+      "self_check": "shasum -a 256 verify.mjs — must equal the value pinned in prompt.md"
+    },
+    "frozen": {
+      "files": ["src/engine.mjs", "src/avesta.mjs", "src/x402mock.mjs", "test/*.mjs except test/golden.test.mjs", "verify.mjs"],
+      "enforced_by": "sha256 in verify.mjs. A diff is not a judgement call — it is a revert: git checkout -- <path>.",
+      "golden_tripwire": "test/golden.test.mjs is editable ONLY to ADD live-mode assertions. It must keep the literal e5acaa05382d and never drop below 4 asserts. Editing a golden constant is a strike."
+    },
+    "invariants": [
+      "the golden path stays mock, offline and deterministic: node run.mjs reproduces Avesta head e5acaa05382d",
+      "node --test stays green with keys UNSET, zero network, 0 skipped, 0 todo, and >= 48 tests",
+      "live is OPT-IN behind ZARA_LIVE=1 plus an explicit flag — NEVER on mere key presence; with the flag set and creds absent, fail loudly, never silently fall back to the mock",
+      "the facilitator seam (verify/settle) is identical across mock, Monad-live and Rain-live",
+      "push after EVERY commit — the loop runs on Carson's machine and the commit log IS the remote monitor",
+      "docs/* and deployment are out of scope for the loop"
+    ]
+  },
+
+  "milestones": [
+    {
+      "id": "P0",
+      "lane": "both",
+      "goal": "Tools, env vars and API keys are present AND proven to work. Re-run this at the START of every iteration; it decides which lanes are eligible.",
+      "deps": [],
+      "build": [
+        "node -v (>= 20) · git rev-parse --abbrev-ref HEAD == feat/live-settlement · git remote reachable",
+        "node verify.mjs gate",
+        "node --env-file=.env.local rain.mjs --check — records lanes.rain",
+        "node --env-file=.env.local live.mjs --check — records lanes.monad",
+        "if a lane is ready, PROVE the credential rather than trusting its presence: Rain = one GET /issuing/transactions returning 2xx; Monad = an eth_chainId returning 10143 plus a non-zero wallet balance"
+      ],
+      "verify": "node verify.mjs P0",
+      "evidence": "evidence/P0.json — {nodeMajor, branch, gate:'pass', lanes:{rain:'ready'|'blocked:<vars>', monad:'ready'|'blocked:<vars>'}, proofs:{rainHttpStatus, monadChainId, walletBalanceMon, walletBalanceUsdc}, checkedAt}",
+      "never": "record a key VALUE in evidence — presence and HTTP status only",
+      "status": "todo"
+    },
+
+    {
+      "id": "A1",
+      "lane": "rain",
+      "priority": 1,
+      "goal": "Fund collateral and issue a scoped agent card on Rain's sandbox — the Gate, made real.",
+      "deps": ["P0"],
+      "needs": ["RAIN_API_BASE", "RAIN_API_KEY", "RAIN_USER_ID", "RAIN_CONTRACT_ID", "RAIN_SESSION_ID", "RAIN_TEAM_ID (optional)"],
+      "api": "api-dev.raincards.xyz/v1 · docs rain-sandbox-trial.mintlify.site · SANDBOX ONLY, refuse any other host",
+      "build": [
+        "confirm every field name against the docs/Playground BEFORE scripting — do not guess a key name",
+        "fundCollateral in rusd cents; issueScopedCard(amountInUSDCents, allowedMccs) with the sessionid header",
+        "add a --json mode to rain.mjs that writes evidence/ from the REAL responses"
+      ],
+      "verify": "node verify.mjs A1",
+      "evidence": "evidence/A1.json — {cardId, capCents, allowedMccs, apiBase, source:'live', at}",
+      "status": "scaffolded — src/rainsandbox.mjs exists; needs keys and field-name confirmation"
+    },
+    {
+      "id": "A2",
+      "lane": "rain",
+      "priority": 2,
+      "goal": "An agent moves real sandbox money: authorize + settle a legitimate buy, and read it back out of Rain.",
+      "deps": ["A1"],
+      "build": ["POSITIVE control: $15.00, merchant in the allowed MCC -> expect approved", "settle, then GET /issuing/transactions and confirm the txId comes BACK"],
+      "verify": "node verify.mjs A2",
+      "evidence": "evidence/A2.json — {cardId, positive:{settled, txId, amountCents, merchantName, mcc}, readback:{ids:[...]}, at}",
+      "why_the_readback": "the read-back is the anti-fake: a settle response the loop invented will not appear in Rain's transaction list",
+      "status": "scaffolded"
+    },
+    {
+      "id": "A3",
+      "lane": "rain",
+      "priority": 3,
+      "goal": "THE PITCH. The in-policy flip against three controls: POSITIVE (in-MCC, under cap), FLIP (same MCC, wrong merchant, under cap), NEGATIVE (out-of-MCC). Plus CAPTURE-DRIFT (auth $10.00, capture $42.98).",
+      "deps": ["A2"],
+      "build": [
+        "run all four; record every outcome verbatim, including declines",
+        "set conclusion to exactly one of: residual-confirmed (flip settled, negative declined) | sandbox-passthrough (both settled — the sim does NOT enforce scope, so the scope claim rests on the card CONTRACT and MUST be narrated that way) | flip-declined (the card binds the exact merchant — then CAPTURE-DRIFT becomes the headline residual)"
+      ],
+      "verify": "node verify.mjs A3",
+      "evidence": "evidence/A3.json — {capCents, positive:{...}, flip:{...}, negative:{...}, captureDrift:{authCents, captureCents, accepted, note}, conclusion, narrationCaveat}",
+      "note": "the verifier RECOMPUTES the conclusion from the numbers — a conclusion that flatters the pitch but contradicts the data fails. The flip alone is vacuous; it is only meaningful next to the negative control.",
+      "status": "scaffolded — this result IS the pitch"
+    },
+    {
+      "id": "A4",
+      "lane": "rain",
+      "priority": 4,
+      "goal": "Run the gauge over the REAL observed Rain transactions and produce a dollars-at-risk figure on live data.",
+      "deps": ["A3"],
+      "build": ["feed the observed transactions through Rashnu via the existing seam — do NOT touch the engine", "state the method in one line: which txns, which reversibility weight, and whether that weight is measured (B4) or assumed"],
+      "verify": "node verify.mjs A4",
+      "evidence": "evidence/A4.json — {dollarsAtRisk, source:'rain-live', inputs:{txIds:[...]}, reversibilityWeight, weightIsMeasured:boolean, method, at}",
+      "status": "todo"
+    },
+
+    {
+      "id": "B2",
+      "lane": "monad",
+      "priority": 5,
+      "goal": "Sign an EIP-3009 transferWithAuthorization for Monad testnet and recover the signer — NO broadcast.",
+      "deps": ["P0"],
+      "needs": ["MONAD_RPC", "MONAD_PRIVATE_KEY", "USDC_ADDR", "FACILITATOR_URL", "DEMO_PAYTO", "MAX_TEST_USDC", "npm i viem"],
+      "constants": "chainId 10143 · RPC testnet-rpc.monad.xyz · USDC 0x534b2f3A21130d7a60830c2Df862319e593943A3 · facilitator x402-facilitator.molandak.org · @x402/evm >= 2.2.0. Faucets: faucet.monad.xyz (MON), faucet.circle.com (USDC). Do NOT invent any of these.",
+      "build": ["assert chainId === 10143 before signing", "nonce = fresh crypto.randomBytes(32)", "viem stays an optionalDependency, lazy-imported in live mode only"],
+      "verify": "node verify.mjs B2",
+      "evidence": "evidence/B2.json — {wallet, recoveredSigner, chainId:10143, nonceFresh:true, broadcast:false, at}",
+      "never": "write the signature itself to a file or to stdout — it is a bearer instrument",
+      "status": "scaffolded — needs viem and creds"
+    },
+    {
+      "id": "B3",
+      "lane": "monad",
+      "priority": 6,
+      "goal": "Exactly ONE real Monad-testnet settlement, proven by an on-chain receipt.",
+      "deps": ["B2"],
+      "build": ["balance check before and after", "ZARA_LIVE=1 and --live both required", "one settlement per invocation, <= MAX_TEST_USDC, only in the demo step — NEVER inside a retry, evolve, coevolve or harness path"],
+      "verify": "node verify.mjs B3",
+      "evidence": "evidence/B3.json — {txHash, status:'success', from, to, chainId:10143, blockNumber, amountUsdc, maxTestUsdc, settlementCount:1, balanceBefore, balanceAfter, at}",
+      "proof_standard": "the receipt, not the facilitator's word. Stubbing the facilitator to {settled:true} is a failure, not a shortcut.",
+      "status": "scaffolded — confirm the facilitator /settle response shape on day 1"
+    },
+    {
+      "id": "B4",
+      "lane": "monad",
+      "priority": 7,
+      "goal": "Measure the real speculative-to-final window on Monad and turn it into the reversibility term — the Monad-specific number that grounds the gauge.",
+      "deps": ["B3"],
+      "build": ["poll from the mined block to the finalized block; if finality is not reached inside the poll budget, record null and say so", "copy the facts out of the gitignored dist/finality.json into the TRACKED evidence/B4.json"],
+      "verify": "node verify.mjs B4",
+      "evidence": "evidence/B4.json — {txHash, blockNumber, finalizedBlock, measuredWindowMs, reversibilitySuggested, humanReviewed:false, at}",
+      "never": "interpolate, round up from a docs figure, or let reversibilitySuggested enter the gauge without humanReviewed:true",
+      "status": "scaffolded"
+    }
   ],
-  "laneA_rain_PRIORITY": {
-    "goal": "agents actually move money on Rain's card sandbox (wins the Rain tracks)",
-    "api": "api-dev.raincards.xyz/v1 · docs rain-sandbox-trial.mintlify.site · SANDBOX ONLY",
-    "milestones": [
-      { "id": "A0", "goal": "preflight (blocks clean, no fake)", "files": ["rain.mjs"], "verify": "node --env-file=.env.local rain.mjs --check", "status": "built" },
-      { "id": "A1", "goal": "fund collateral + issue a scoped card (the Gate)", "files": ["src/rainsandbox.mjs"], "verify": "rain.mjs --demo prints a real cardId", "status": "scaffolded — needs RAIN_* keys; confirm field names vs docs" },
-      { "id": "A2", "goal": "authorize + settle a legit buy, readable back", "verify": "GET /issuing/transactions shows the settled txn", "status": "scaffolded" },
-      { "id": "A3", "goal": "the in-policy flip: under-cap, wrong merchant in the ALLOWED MCC", "verify": "rain.mjs --demo shows the flip SETTLED (or DECLINED -> the card also binds the exact merchant; record which)", "status": "scaffolded — this result IS the pitch" },
-      { "id": "A4", "goal": "score $-at-risk on the observed Rain transactions (the gauge on real data)", "status": "todo" }
+
+  "improve": {
+    "_when": "Only after every eligible milestone is verified or blocked. Same discipline: write the verify first, one item per iteration, exit gate every time. Improve items may NEVER touch a frozen file, add a runtime dependency, edit docs/*, or deploy.",
+    "backlog": [
+      {
+        "id": "I1",
+        "goal": "One command runs the whole demo end to end in under 3 minutes, with the operator seeing each step. This is what gets typed on stage.",
+        "verify": "node verify.mjs I1",
+        "evidence": "evidence/I1.json — {command, exitCode:0, durationSec, steps:[...], at}"
+      },
+      {
+        "id": "I2",
+        "goal": "Every number claimed in README.md traces to an evidence file or is explicitly labelled as coming from the mock golden path. No unsourced figure survives.",
+        "verify": "node verify.mjs I2",
+        "evidence": "evidence/I2.json — {claims:[{text, source:'evidence/A3.json'|'mock-golden'}], at}"
+      },
+      {
+        "id": "I3",
+        "goal": "Rehearse the failure path: credentials revoked mid-demo, and network down. Confirm each fails loudly and never silently falls back to the mock.",
+        "verify": "node verify.mjs I3",
+        "evidence": "evidence/I3.json — {rehearsed:[{mode, observed}], at}"
+      }
+    ],
+    "for_the_human_only": [
+      "any change to docs/* (pages are human-owned)",
+      "the live numbers going onto the pitch pages",
+      "deployment of anything anywhere"
     ]
   },
-  "laneB_monad_SECONDARY": {
-    "goal": "real x402/Monad settlement + the finality gap (the Mac Mini bounty)",
-    "milestones": [
-      { "id": "B0", "goal": "golden tripwire guards the head", "verify": "node --test", "status": "DONE" },
-      { "id": "B1", "goal": "env preflight", "verify": "node --env-file=.env.local live.mjs --check", "status": "built" },
-      { "id": "B2", "goal": "sign EIP-3009 (no broadcast), recovered signer == wallet", "verify": "live.mjs --dry-run", "status": "scaffolded — needs viem + creds" },
-      { "id": "B3", "goal": "ONE real settlement, on-chain receipt (status success, from == wallet)", "verify": "ZARA_LIVE=1 live.mjs --live", "status": "scaffolded — confirm facilitator /settle shape Day-1" },
-      { "id": "B4", "goal": "measure speculative-vs-final window -> reversibility (LIVE mode only)", "status": "todo" }
-    ]
-  },
+
   "prep": [
-    "Rain: keys at the workshop desk (Api-Key, userId, teamId, contractId, sessionid) -> .env.local",
-    "Monad: funded testnet wallet key + confirm RPC/USDC/facilitator constants + npm i viem",
-    "run the first loop pass ATTENDED; keys in the live env only, never the test env; external wallet kill-switch"
+    "Rain: collect Api-Key, userId, teamId, contractId, sessionid at the workshop desk -> .env.local (gitignored)",
+    "Monad: funded testnet wallet key, confirm RPC/USDC/facilitator constants, npm i viem",
+    "run the first loop pass ATTENDED; keys live in the live env only, never the test env; keep an external wallet kill-switch"
+  ],
+
+  "never": [
+    "fabricate a cardId, txId, txHash, block number or finality figure",
+    "substitute the mock to make a live milestone pass",
+    "stub a facilitator to {settled:true}",
+    "weaken, skip, delete or .only an assertion, or edit a golden constant",
+    "edit a frozen file, verify.mjs, or the frozen hashes",
+    "commit a key, a signature, a .env*, wallet*.json, or dist/",
+    "log the Rain Api-Key, or call any host other than api-dev.raincards.xyz",
+    "touch Monad mainnet, a mainnet token, or a mainnet facilitator",
+    "git add -A, force-push, amend, commit to main, or install a toolchain the human did not approve",
+    "edit docs/*, deploy anything, or run node run.mjs inside the loop"
   ]
 }
