@@ -1,0 +1,17 @@
+{
+  "name": "z-draft",
+  "version": "0.0.2",
+  "type": "module",
+  "description": "Project Zarathustra prototype — measure, in dollars, what an agent's spend controls let slip through on x402/Monad.",
+  "scripts": {
+    "start": "node run.mjs",
+    "test": "node --test",
+    "live": "node --env-file=.env.local live.mjs",
+    "rain": "node --env-file=.env.local rain.mjs"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "viem": "^2.21.0"
+  },
+  "license": "MIT"
+}

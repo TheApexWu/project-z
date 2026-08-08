@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project Zarathustra — Visual Work</title>
+<style>
+  :root{--bg:#0e0b1a;--surface:#16122a;--hair:rgba(255,255,255,.09);--purple:#836EF9;--magenta:#F0197A;--amber:#F5B849;--bamboo:#7cf2b0;
+    --ink:#cdc9e0;--dim:#8a86a3;--faint:#5f5c78;--grot:'Space Grotesk','Inter',system-ui,sans-serif;--mono:ui-monospace,'SF Mono',Menlo,monospace}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:var(--mono);color:var(--ink);letter-spacing:.2px;
+    background:radial-gradient(1100px 700px at 80% -12%,rgba(131,110,249,.12),transparent 60%),radial-gradient(900px 600px at 6% 108%,rgba(240,25,122,.07),transparent 60%),var(--bg)}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 22px 80px}
+  h1{font-family:var(--grot);font-weight:700;font-size:26px;letter-spacing:.5px;color:#efeafc;margin:0;display:flex;align-items:center;gap:12px}
+  h1 .tick{width:13px;height:13px;border-radius:3px;background:var(--purple);box-shadow:0 0 14px var(--purple)}
+  .sub{color:var(--dim);font-size:13px;margin:8px 0 34px;max-width:640px;line-height:1.6}
+  .cards{display:grid;gap:16px}
+  a.card{display:block;text-decoration:none;border:1px solid var(--hair);border-radius:14px;background:var(--surface);
+    padding:20px 22px;transition:transform .14s,box-shadow .2s,border-color .2s;position:relative;overflow:hidden}
+  a.card:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.4)}
+  a.card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px}
+  a.card.terminal::before{background:linear-gradient(90deg,var(--purple),var(--magenta))}
+  a.card.terminal:hover{border-color:rgba(131,110,249,.5)}
+  a.card.catalog::before{background:linear-gradient(90deg,var(--amber),var(--bamboo))}
+  a.card.catalog:hover{border-color:rgba(245,184,73,.5)}
+  a.card.touhou::before{background:linear-gradient(90deg,#fdf6e3,var(--magenta),var(--purple))}
+  a.card.touhou:hover{border-color:rgba(240,25,122,.5)}
+  .ct{font-family:var(--grot);font-weight:700;font-size:17px;color:#efeafc;display:flex;align-items:baseline;gap:10px}
+  .ct .tag{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--faint);border:1px solid var(--hair);border-radius:20px;padding:2px 9px}
+  .cd{color:var(--dim);font-size:12.5px;margin-top:8px;line-height:1.6}
+  .cd b{color:var(--ink)}
+  .arrow{position:absolute;right:22px;top:22px;color:var(--faint);font-size:18px;transition:transform .16s}
+  a.card:hover .arrow{transform:translateX(4px);color:var(--ink)}
+  .foot{margin-top:34px;font-size:10px;color:var(--faint);letter-spacing:.8px;text-transform:uppercase;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="tick"></span>PROJECT ZARATHUSTRA — VISUAL WORK</h1>
+  <div class="sub">The gauge, not a firewall. Three artifacts for the Rain × Monad demo: a working terminal mockup, the design-system catalog, and a bullet-hell (Imperishable Night) take. Every number on screen is the real computed value from the engine.</div>
+  <div class="cards">
+    <a class="card touhou" href="touhou.html">
+      <span class="arrow">→</span>
+      <div class="ct">永夜抄 · Imperishable Ledger <span class="tag">bullet-hell</span></div>
+      <div class="cd">The Touhou 8 direction. Portrait <b>danmaku playfield</b> — the injected agent sprays payment-attempts at a cap-gate laser, one amber flip threads through. Right-hand <b>arcade HUD</b> wired to real metrics (score = $-at-risk, graze = blocked, spell cards = attack tactics, Last Word = the $19.99 floor). Bold, memorable, gamer-native.</div>
+    </a>
+    <a class="card terminal" href="sample.html">
+      <span class="arrow">→</span>
+      <div class="ct">Terminal Cockpit <span class="tag">working demo</span></div>
+      <div class="cd">Bloomberg-black quant register. The <b>attack swarm</b> hits the cap laser, the <b>honest cap slider</b> (drag it — below $50 the flip is sealed), the coevolution convergence to the floor, the re-rank (#5 → #1), and the signed receipt. The credible, fintech-safe default.</div>
+    </a>
+    <a class="card catalog" href="catalog.html">
+      <span class="arrow">→</span>
+      <div class="ct">Design Catalog <span class="tag">reference sheet</span></div>
+      <div class="cd">The visual system: three <b>theme directions</b>, the core palette (click-to-copy hex), typography, the danmaku motif states, component tiles, motion tokens, the <b>game/media reference board</b> with dose guidance, and the myth-vs-measurement dial.</div>
+    </a>
+  </div>
+  <div class="foot">z-draft · design/visual-system · a measurement rig, not a control</div>
+</div>
+</body>
+</html>
