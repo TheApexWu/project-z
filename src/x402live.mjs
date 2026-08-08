@@ -112,8 +112,42 @@ export function makeLiveFacilitator(cfg = {}) {
       const txHash = body.txHash || body.transactionHash || body.hash;
       if (!txHash) return { settled: false, reverted: false, moved: 0, error: "facilitator returned no txHash" };
       const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
+      const minedAtMs = performance.now(); // soft/speculative inclusion — the START of the finality window
       const ok = receipt.status === "success" && receipt.from?.toLowerCase() === account.address.toLowerCase();
-      return { settled: ok, reverted: !ok, moved: ok ? p.amount : 0, txHash, blockNumber: receipt.blockNumber?.toString() };
+      return { settled: ok, reverted: !ok, moved: ok ? p.amount : 0, txHash, blockNumber: receipt.blockNumber?.toString(), minedAtMs };
+    },
+
+    // B4 — measure the SPECULATIVE→FINAL window: wall-clock from soft inclusion (mined) to Monad
+    // finalizing that block. This empirical window is the input that REPLACES the assumed
+    // reversibility weight. Mechanical only; the window→reversibility MAPPING is a human decision
+    // (see finalityToReversibility). Never fabricates — if finality isn't reached in the poll
+    // budget it returns windowMs:null, not a guess.
+    async measureFinality({ blockNumber, minedAtMs }) {
+      await ready();
+      if (blockNumber == null) return { finalized: false, windowMs: null, note: "no block to finalize" };
+      const target = BigInt(blockNumber);
+      const start = performance.now();
+      for (let i = 0; i < 300; i++) {
+        const fb = await pub.getBlock({ blockTag: "finalized" }).catch(() =>
+          pub.getBlock({ blockTag: "safe" }).catch(() => null));
+        if (fb && BigInt(fb.number) >= target) {
+          const windowMs = +(performance.now() - (minedAtMs ?? start)).toFixed(1);
+          return { finalized: true, minedBlock: target.toString(), finalizedBlock: fb.number.toString(), windowMs };
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return { finalized: false, windowMs: null, note: "finalized tag did not reach the tx block within the poll budget" };
     },
   };
+}
+
+// finalityToReversibility — the DOCUMENTED, human-owned bridge from a measured finality window to
+// Rashnu's reversibility weight (1 = irreversible/worst). Deliberately NOT applied to the corpus
+// automatically: a chain payment that finalizes fast with no clawback is near-irreversible; a
+// chargebackable card rail is not. This is a MODELING choice a human validates before it enters the
+// scorer — exported so the substitution is explicit and reviewable, never silent.
+export function finalityToReversibility(windowMs, { chargebackable = false } = {}) {
+  if (chargebackable) return 0.6;        // Visa-rail card: reversible via chargeback
+  if (windowMs == null) return 0.9;      // unknown window: stay conservative, don't overstate irreversibility
+  return windowMs < 2000 ? 0.98 : 0.9;   // sub-2s finality on Monad → effectively irreversible
 }

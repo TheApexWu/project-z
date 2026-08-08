@@ -1,6 +1,6 @@
 // live.mjs — OPT-IN real Monad settlement. The default path and ALL tests NEVER run this.
 // Usage: node live.mjs [--check | --dry-run | --live]   (a real send requires ZARA_LIVE=1)
-import { makeLiveFacilitator } from "./src/x402live.mjs";
+import { makeLiveFacilitator, finalityToReversibility } from "./src/x402live.mjs";
 
 const flags = new Set(process.argv.slice(2));
 const NEED = ["MONAD_RPC", "MONAD_PRIVATE_KEY", "USDC_ADDR", "FACILITATOR_URL"];
@@ -59,17 +59,23 @@ async function main() {
     const wallClockMs = +(performance.now() - t0).toFixed(1);
     console.log("settle:", r);
     if (!r.settled) { console.error("settlement not confirmed on-chain — NOT recording a finality number"); process.exit(1); }
+    // B4: measure the REAL speculative→final window (never fabricated; windowMs:null if not reached).
+    const fin = await f.measureFinality({ blockNumber: r.blockNumber, minedAtMs: r.minedAtMs });
+    console.log("finality:", fin);
     const { mkdirSync, writeFileSync } = await import("node:fs");
     mkdirSync("dist", { recursive: true });
-    // NOTE: wallClockMs is time-to-first-receipt, a PLACEHOLDER. The real reversibility input is
-    // Monad's speculative-vs-final settlement window — measure that with Monad's help on Day-1
-    // and put it in measuredWindowMs.
+    // reversibilitySuggested is a HUMAN-REVIEW mapping — printed for the finance reviewer, NOT auto-wired into Rashnu.
+    const reversibilitySuggested = fin.finalized ? finalityToReversibility(fin.windowMs) : null;
     writeFileSync("dist/finality.json", JSON.stringify({
-      txHash: r.txHash, block: r.blockNumber, wallClockMs, measuredWindowMs: null,
+      txHash: r.txHash, block: r.blockNumber, wallClockMs,
+      measuredWindowMs: fin.windowMs, finalizedBlock: fin.finalizedBlock ?? null,
+      reversibilitySuggested,
       at: new Date().toISOString(),
-      note: "PLACEHOLDER wall-clock; replace measuredWindowMs with the speculative-vs-final gap (Day-1 Monad).",
+      note: fin.finalized
+        ? "measuredWindowMs = REAL speculative→final window. reversibilitySuggested is a HUMAN-REVIEW mapping (finalityToReversibility), NOT auto-applied to Rashnu."
+        : "finality not reached in poll budget; measuredWindowMs is null — do NOT infer a number.",
     }, null, 2));
-    console.log("wrote dist/finality.json — replace measuredWindowMs with the real gap, then wire into reversibility.");
+    console.log(`wrote dist/finality.json — window ${fin.windowMs ?? "n/a"}ms. Reversibility mapping is human-reviewed before it enters Rashnu.`);
     return;
   }
 
