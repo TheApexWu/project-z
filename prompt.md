@@ -43,9 +43,9 @@ frozen-file diff, or a no-op iteration. **3 strikes OR 15 iterations → STOP**,
 
 ## Git + secrets
 Work ONLY on `feat/live-settlement`; NEVER main; never force-push/amend; never `git add -A`.
-**Push after EVERY commit** (loop runs on Carson's machine — the commit log is the remote
-monitor). Before each commit, `git diff --cached` — abort if it contains a 64-hex key, an RPC URL,
-a `.env*`, `wallet*.json`, or `dist/`. Never write a secret or a signed authorization (a bearer
-instrument) to a file or stdout. No deploy (Railway/K8s/hosting); don't touch `docs/*`. Commit as
-the human author, NEVER "Co-Authored-By: Claude." Framing: Rain = stablecoin card-issuing
-platform; Monad = high-performance parallel-EVM L1 (never "crypto coin").
+**Push after EVERY commit** (the commit log is the remote monitor). Before each commit,
+`git diff --cached` — abort if it contains a 64-hex key, an RPC URL, a `.env*`, `wallet*.json`,
+or `dist/`. Never write a secret or a signed authorization (a bearer instrument) to a file or
+stdout. No deploy (Railway/K8s/hosting); don't touch `docs/*`. Commit under the human author's
+name. Framing: Rain = stablecoin card-issuing platform; Monad = high-performance parallel-EVM L1
+(never "crypto coin").
