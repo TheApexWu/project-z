@@ -39,9 +39,12 @@ export function makeRainSandbox(cfg = {}) {
   // 1) fund collateral (rusd, cents)
   const fundCollateral = (amountCents) => call("POST", "/simulate/collateral/fund", { contractId, currency: "rusd", amount: amountCents });
 
-  // 2) issue a scoped card — the Gate. amountInUSDCents is the card's spend cap.
-  const issueScopedCard = async (amountInUSDCents) => {
-    const r = await call("POST", `/issuing/users/${userId}/cards/scoped`, { amountInUSDCents }, { sessionid: sessionId });
+  // 2) issue a scoped card — the Gate. amountInUSDCents is the cap; allowedMccs binds the
+  // merchant CATEGORY (Rain's API has NO exact-merchant field — category is the tightest bind).
+  const issueScopedCard = async (amountInUSDCents, allowedMccs) => {
+    const body = { amountInUSDCents };
+    if (allowedMccs && allowedMccs.length) body.allowedMccs = allowedMccs;
+    const r = await call("POST", `/issuing/users/${userId}/cards/scoped`, body, { sessionid: sessionId });
     return r.id || r.cardId || r.card?.id || r.data?.id;
   };
 

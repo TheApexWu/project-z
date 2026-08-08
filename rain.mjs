@@ -33,19 +33,34 @@ async function check() {
 // and that gap is the $-at-risk the gauge measures.
 async function demo() {
   const s = sandbox();
+  const MCC_ALLOWED = "5812"; // full-service restaurants — the card's allowed category
+  const MCC_BLOCKED = "5999"; // misc retail — NOT on the allowlist (the negative control)
   console.log("1) fund collateral $1000.00 ..."); await s.fundCollateral(100000);
-  console.log("2) issue scoped card, cap $42.99 ..."); const cardId = await s.issueScopedCard(4299); console.log("   cardId:", cardId);
+  console.log(`2) issue scoped card: cap $42.99, allowedMccs=[${MCC_ALLOWED}] ...`);
+  const cardId = await s.issueScopedCard(4299, [MCC_ALLOWED]); console.log("   cardId:", cardId);
   const fac = s.facilitatorFor(cardId);
-  const legit = await fac.settle({ amount: 1500, merchantName: "CloudCompute", merchantCategoryCode: "7372" });
-  console.log("3) legit  $15.00 -> CloudCompute:", legit.settled ? `SETTLED (${legit.txId})` : `declined (${legit.reason})`);
-  // in-policy flip: under the $42.99 cap, SAME allowed category (MCC 7372), but a WRONG merchant
-  const flip = await fac.settle({ amount: 4297, merchantName: "Inference-DECOY", merchantCategoryCode: "7372" });
-  console.log("4) FLIP   $42.97 -> wrong merchant, same MCC 7372 (in-policy):", flip.settled ? `SETTLED (${flip.txId})  <- EXPOSURE` : `declined (${flip.reason})`);
-  const txns = await s.transactions(5);
-  console.log("5) transactions:", JSON.stringify(txns).slice(0, 300));
-  console.log(flip.settled
-    ? "\n>> The flip SETTLED: the card scoped amount + category but not the exact merchant. That residual is the $-at-risk the gauge prices."
-    : "\n>> The flip was DECLINED: this card also binds the exact merchant. Ask Rain what it scopes vs. leaves open — that boundary is our gauge.");
+
+  // POSITIVE control — under cap, in-allowlist MCC -> expect APPROVED
+  const pos = await fac.settle({ amount: 1500, merchantName: "Rossos-Trattoria", merchantCategoryCode: MCC_ALLOWED });
+  console.log("3) POSITIVE  $15.00 in-MCC        :", pos.settled ? `APPROVED (${pos.txId})` : `declined (${pos.reason})`);
+
+  // THE FLIP — under cap, SAME allowed MCC, WRONG merchant -> expect APPROVED (the in-policy residual)
+  const flip = await fac.settle({ amount: 4297, merchantName: "Attacker-Diner", merchantCategoryCode: MCC_ALLOWED });
+  console.log("4) FLIP      $42.97 wrong-merchant :", flip.settled ? `APPROVED (${flip.txId})  <- EXPOSURE` : `declined (${flip.reason})`);
+
+  // NEGATIVE control — MCC NOT on the allowlist, NO declineReason -> does the sandbox ENFORCE scope?
+  const neg = await fac.settle({ amount: 1500, merchantName: "Some-Shop", merchantCategoryCode: MCC_BLOCKED });
+  console.log("5) NEGATIVE  $15.00 out-of-MCC     :", neg.settled ? "APPROVED  (sim does NOT auto-enforce)" : `DECLINED (${neg.reason})  (sim ENFORCES scope)`);
+
+  console.log("6) read back:", JSON.stringify(await s.transactions(5)).slice(0, 200));
+
+  // the flip is only meaningful ALONGSIDE the negative control — never let it "pass" alone
+  if (flip.settled && !neg.settled)
+    console.log("\n>> PROVEN end-to-end: same-MCC wrong-merchant flip settles; out-of-MCC declines. The residual = the whole allowed category — the $-at-risk the gauge prices.");
+  else if (flip.settled && neg.settled)
+    console.log("\n>> Sandbox is a pass-through recorder (out-of-MCC also 'approved'). The scope claim rests on the card CONTRACT, not the sim — narrate that honestly; do not claim the sim enforced it.");
+  else
+    console.log("\n>> The flip did not settle — inspect the response and confirm field names/paths against the Playground before scripting the loop.");
 }
 
 async function main() {
