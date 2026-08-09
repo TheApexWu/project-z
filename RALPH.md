@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T09:55:00Z
+- updated: 2026-08-09T09:53:42Z
 - last finished: milestone 8: DoorDash Drive sandbox submission + declined-order proof
-- currently working on: milestone 9: Frontend: admin panel, past orders, live order websocket (iteration 5, attempt 1)
+- currently working on: (between milestones)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -53,3 +53,4 @@
 - 2026-08-09T09:13:36Z START iteration 4 -> milestone 8 (DoorDash Drive sandbox submission + declined-order proof), attempt 1
 - 2026-08-09T09:55:00Z COMPLETE milestone 8: three orders CLOSED with DoorDash sandbox delivery ids + Rain decline evidence; announcement shows the final status line; /api/orders/{id}/proof live. See docs-notes/milestone-8.md.
 - 2026-08-09T09:55:00Z DONE milestone 8 (DoorDash Drive sandbox submission + declined-order proof)
+- 2026-08-09T09:53:42Z DONE milestone 8 (DoorDash Drive sandbox submission + declined-order proof)
