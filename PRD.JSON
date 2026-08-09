@@ -1,0 +1,320 @@
+{
+  "project": {
+    "name": "group-grub",
+    "one_liner": "Slack-native agentic group food ordering: an admin opens a budgeted DoorDash group order, per-person AI agents negotiate each participant's sub-order in Slack DMs, then a Rain-minted card pays (and is intentionally declined, with proof) through the DoorDash Drive sandbox.",
+    "hackathon": {
+      "sponsors": [
+        "rain.xyz",
+        "monad"
+      ],
+      "themes": [
+        "agentic commerce",
+        "developer tooling",
+        "infrastructure",
+        "AI",
+        "commerce"
+      ],
+      "goals": [
+        "First prize with Rain",
+        "Bounty: Best Implementation of Monad"
+      ],
+      "notes_for_judging": "Rain cards are dummy cards; orders will be DECLINED by design. Capturing and displaying proof of the attempted-then-declined transaction is a FEATURE (decline-proof page). DoorDash API is sandbox-only; no real orders occur."
+    },
+    "full_context": "An admin runs `/begin-order` in Slack with: a list of users, a total budget, and a restaurant (e.g. McDonald's, Burger King, Applebee's — agent uses best judgment to resolve what the admin meant). The bot posts an 'announcement menu' message in an admin-specified channel saying a group order has been announced. Each listed participant receives a Slack DM from a dedicated AI agent (one agent pod per person, running the goose docker image on Kubernetes, backed by OpenRouter model z-ai/glm-5.2). Each participant gets a fair share of the total budget. The agent lists orderable items from the chosen restaurant, takes free-form conversation, offers suggestions, adds items to the participant's cart, and always enforces the sub-budget — suggesting removals when over. When the agent has a candidate order it asks the user to confirm (yes → submitted; no → keep iterating). A confirmed user may still reopen and change their order until the group order closes. Each confirmation updates the channel announcement message ('X has confirmed'). The group order closes when ALL users confirm OR when the admin-configured timer expires — whichever, there is then ALWAYS a 2-minute grace period during which users may still modify orders. After grace: mint a Rain card for the order total, then submit the order through the DoorDash Drive sandbox using that card. The card is a dummy; the payment attempt will decline — record and surface the decline proof. A web frontend (Vite + React + Node) has: (1) an admin panel behind basic HTTP auth (username `carson`, password `1234`) where the admin enters Rain client rules for card creation, sets the delivery address, and manages which Slack users are admins / may create orders; (2) a past-orders page; (3) a live current-order page fed over a websocket showing who is ordering what in real time. The Go orchestrator server exposes HTTP for the web server and the websocket for live order content. Hard security rule: NO order may ever exceed $300 total. Menu data: FIRST attempt browser-use in Stealth Mode to scrape live DoorDash menus for a SPECIFIC restaurant location; if that fails or is unreliable, FALL BACK to the local Kaggle CSV dataset (restaurantmenuchanges.csv) loaded into Postgres.",
+    "tech_stack": {
+      "backend": "Go (latest, go1.26.x available locally) — orchestrator: Slack events/commands, order state machine, budget math, Rain card minting, DoorDash Drive sandbox submission, HTTP API + websocket for frontend, Postgres persistence",
+      "agents": "One agent per participant. Docker base image: ghcr.io/aaif-goose/goose:sha-86eec2a. LLM: OpenRouter model id z-ai/glm-5.2. Agents run as Kubernetes Jobs/Pods (DigitalOcean cluster, 3 nodes allowed). Agents talk to the orchestrator over HTTP for menu/cart/budget tools and DM users via Slack.",
+      "frontend": "Vite + Node + React, deployed on Railway. Basic HTTP auth carson/1234 for admin panel.",
+      "data": "Postgres on Railway. Kaggle dataset restaurantmenuchanges.csv (5007 rows; columns: createdOn, changeOperation, market, city, menuItemName, menuItemDescription, menuItemCurrentPrice, menuItemPreviousPrice, menuItemImageUrl, menuItemCategory, menuItemAverageRating, menuItemRatingCount, restaurantName, restaurantDescription, restaurantAddress, restaurantImageUrl, restaurantPriceRange, restaurantLatitude, restaurantLongitude).",
+      "menu_scraping": "browser-use cloud API, Stealth Mode, targeting a specific DoorDash restaurant location. Fallback: CSV dataset in Postgres.",
+      "hosting": "Railway project 17b87956-a6e5-4dee-b0fc-21c383c922c2 (named 'skillful-enjoyment') for Go server, frontend, Postgres. Railway MCP server + railway CLI available. Kubernetes (kubeconfig: k8s-1-36-0-do-0-ams3-1780491665629-kubeconfig.yaml, git-ignored) for agent pods. Image registry: registry.digitalocean.com/rainxyzhackathon2026 (auth in git-ignored ./docker-config)."
+    },
+    "credentials_and_resources": {
+      "api_keys_file": "./API_KEYS (git-ignored). Contains: DOORDASH_SIGNING_SECRET, DOORDASH_DEVELOPER_ID, DOORDASH_KEY_ID, OPEN_ROUTER_KEY, RAIN_TEAM_ID, RAIN_USER_ID, RAIN_API_KEY, COLLATERAL_CONTRACT_ID, BROWSER_USER_API_KEY",
+      "rain_api_base": "https://api-dev.raincards.xyz/v1 (sandbox; auth header `Api-Key: $RAIN_API_KEY`; docs: https://rain-sandbox-trial.mintlify.site)",
+      "doordash": "DoorDash Drive sandbox — https://developer.doordash.com/en-US/api/drive — auth is a self-signed JWT built from DOORDASH_DEVELOPER_ID + DOORDASH_KEY_ID + DOORDASH_SIGNING_SECRET",
+      "slack": "slack CLI v4.6.0 installed and authed to workspace rain-hackathon-sand (Team E0BNWAG5A4V, user U0BNXRCAQ3G, org-level auth)",
+      "railway": "railway CLI 5.34.2 + Railway MCP server, logged in as Carson Weeks",
+      "kubernetes": "kubeconfig file in repo root (git-ignored). NOTE (verified 2026-08-08): kubectl is NOT currently installed on this machine — step 0 must install it.",
+      "docker_registry": "./docker-config contains auth JSON for registry.digitalocean.com; use `docker --config` or copy to ~/.docker/config.json",
+      "docs": [
+        "https://www.rain.xyz/resources/introducing-the-agent-control-layer",
+        "https://docs.x402.org/llms.txt",
+        "https://www.getfoundry.sh/llms.txt",
+        "https://rain-sandbox-trial.mintlify.site",
+        "https://docs.slack.dev/llms.txt",
+        "https://developer.doordash.com/en-US/docs/drive/overview/about_drive/",
+        "https://goose-docs.ai/llms.txt",
+        "https://docs.browser-use.com/llms.txt"
+      ]
+    },
+    "hard_rules": [
+      "NO order total may ever exceed $300 — enforce server-side in the Go orchestrator, not just UI.",
+      "Always apply the 2-minute grace period after all-confirmed OR timer expiry, before minting the card.",
+      "Admin panel basic auth is exactly username `carson`, password `1234`.",
+      "Rain cards are dummy cards: the DoorDash payment WILL decline. Persist the decline evidence (request, response, timestamps, card id) and expose it in the UI as the decline-proof feature.",
+      "This codebase is written by and for an AI agent (Ralph loop): keep comments minimal and only where they inform the NEXT loop iteration. Do NOT write an exhaustive test suite — only test logic that must survive repeated runs (state machine, budget split, $300 cap, timer/grace transitions, JWT signing).",
+      "Never commit API_KEYS, docker-config, or k8s* files (already git-ignored)."
+    ],
+    "architecture_decisions": [
+      "Orchestrator owns ALL state (Postgres). Agents are stateless tools-over-HTTP clients; killing an agent pod must never lose an order.",
+      "Agent <-> orchestrator contract: GET /internal/menu?restaurant=..., GET/POST /internal/orders/{id}/participants/{uid}/cart, POST .../confirm, GET .../budget. Agents receive ORDER_ID, PARTICIPANT_SLACK_ID, ORCHESTRATOR_URL, SLACK creds, OPEN_ROUTER_KEY via k8s env.",
+      "Budget split: fair share = floor(total_cents / n_participants); remainder stays unallocated as buffer.",
+      "Order state machine: OPEN -> COLLECTING -> GRACE(2m) -> MINTING -> SUBMITTING -> DECLINED_PROOF_CAPTURED -> CLOSED (plus CANCELLED). Announcement message re-rendered on every participant confirm/unconfirm and state change.",
+      "Websocket broadcasts participant cart/confirm events keyed by order id for the live current-order page."
+    ]
+  },
+  "preflight_findings_2026_08_08": {
+    "verified_working": [
+      "railway CLI logged in; project 17b87956-a6e5-4dee-b0fc-21c383c922c2 exists ('skillful-enjoyment'), zero services provisioned yet",
+      "slack CLI authed (rain-hackathon-sand)",
+      "RAIN_API_KEY valid: GET https://api-dev.raincards.xyz/v1/issuing/cards with `Api-Key` header returned 200",
+      "OPEN_ROUTER_KEY valid: GET https://openrouter.ai/api/v1/models returned 200",
+      "go1.26.5, docker, node/npm installed",
+      "restaurantmenuchanges.csv present: 5007 rows"
+    ],
+    "gaps": [
+      "kubectl NOT installed — install in step 0, then verify cluster access with the repo kubeconfig",
+      "browser-use key untested: /api/v2/me and /api/v1/me both 404 — find correct verification endpoint from https://docs.browser-use.com/llms.txt in step 0",
+      "DoorDash JWT flow untested — must mint a JWT and hit a sandbox endpoint in step 0",
+      "docker registry auth untested — do a push to registry.digitalocean.com/rainxyzhackathon2026 in step 0",
+      "Slack app (bot token, slash command, DM scopes) not yet created — the CLI is authed but the bot itself must be scaffolded"
+    ]
+  },
+  "milestones": [
+    {
+      "id": 0,
+      "name": "Environment, tools, and credential verification",
+      "completed": false,
+      "description": "Prove every tool and credential works BEFORE building anything. Fix gaps found in preflight.",
+      "tasks": [
+        "Install kubectl; run `kubectl --kubeconfig k8s-1-36-0-do-0-ams3-1780491665629-kubeconfig.yaml get nodes` and confirm 3 Ready nodes",
+        "Source ./API_KEYS and confirm all 9 variables are non-empty",
+        "Rain: GET /v1/issuing/cards with Api-Key header → expect 200 (already verified once; re-verify)",
+        "OpenRouter: POST /api/v1/chat/completions with model z-ai/glm-5.2, 1-token prompt → expect 200 and a completion",
+        "DoorDash: write a tiny Go (or shell) JWT signer per Drive docs (HS256, developer_id/key_id/signing_secret) and GET/POST a sandbox endpoint (e.g. delivery quote) → expect non-401 response",
+        "browser-use: read https://docs.browser-use.com/llms.txt, find task-creation endpoint, create a trivial cloud task with BROWSER_USER_API_KEY → expect auth accepted",
+        "Docker registry: `docker --config <dir-with-docker-config> pull` the goose base image ghcr.io/aaif-goose/goose:sha-86eec2a, tag and push a test tag to registry.digitalocean.com/rainxyzhackathon2026/agent:smoke → expect push success",
+        "Slack: `slack auth list` OK; create/scaffold the Slack app (manifest with slash command /begin-order, bot scopes: chat:write, im:write, commands, users:read, channels:read) and install to workspace; capture bot token + signing secret into API_KEYS",
+        "Railway: confirm project link to 17b87956-a6e5-4dee-b0fc-21c383c922c2 via MCP/CLI"
+      ],
+      "verifications": [
+        "./scripts/preflight.sh exists, runs ALL the above checks, and exits 0",
+        "Every external API (Rain, OpenRouter, DoorDash, browser-use) returned an authenticated (non-401/403) response",
+        "kubectl reports 3 Ready nodes using the repo kubeconfig",
+        "Test image push to registry.digitalocean.com/rainxyzhackathon2026 succeeded",
+        "Slack app installed with /begin-order slash command visible in the workspace"
+      ],
+      "exit_criteria": "preflight.sh exits 0 on a clean run"
+    },
+    {
+      "id": 1,
+      "name": "Railway infrastructure provisioning",
+      "completed": false,
+      "description": "Provision Postgres, the Go orchestrator service, and the frontend service on Railway project 17b87956-a6e5-4dee-b0fc-21c383c922c2.",
+      "tasks": [
+        "Deploy Postgres template via Railway MCP",
+        "Create `orchestrator` service (Go, hello-world HTTP server with /healthz) and deploy from this repo (subdir ./server)",
+        "Create `frontend` service (Vite React placeholder) and deploy (subdir ./web)",
+        "Wire reference variables: orchestrator gets DATABASE_URL from Postgres; frontend gets orchestrator public URL",
+        "Set all API_KEYS values as orchestrator service variables",
+        "Generate public domains for orchestrator and frontend"
+      ],
+      "verifications": [
+        "curl https://<orchestrator-domain>/healthz returns 200 with body including a DB ping result",
+        "Frontend domain serves the placeholder page",
+        "`railway environment status` shows all 3 services SUCCESS"
+      ],
+      "exit_criteria": "Both public domains respond 200; orchestrator confirms live Postgres connection"
+    },
+    {
+      "id": 2,
+      "name": "Data layer + CSV menu ingestion",
+      "completed": false,
+      "description": "Postgres schema and ingestion of the Kaggle fallback dataset.",
+      "tasks": [
+        "Schema (migrations in ./server/migrations): restaurants, menu_items, orders (state, budget_cents, timer_deadline, grace_deadline, channel_id, restaurant, address), participants (slack_user_id, share_cents, confirmed_at), cart_items, admins (slack_user_id, can_create_orders), settings (rain client rules, delivery address), card_attempts (rain_card_id, amount_cents, doordash_request, doordash_response, declined_at)",
+        "Ingestion command: parse restaurantmenuchanges.csv, dedupe by (restaurantName, menuItemName) keeping latest createdOn and skipping changeOperation=Delete rows, normalize price strings ('$2.19' → 219 cents), upsert into restaurants + menu_items",
+        "Menu query API: GET /internal/menu?restaurant=<fuzzy name> returns items with prices; fuzzy match restaurant name (e.g. 'mcdonalds' → \"McDonald's\")"
+      ],
+      "verifications": [
+        "Ingestion run reports row counts",
+        "SQL check: SELECT count(*) FROM menu_items returns > 1000",
+        "curl the menu endpoint for 'Subway' and 'American Deli' returns non-empty item lists with integer cent prices",
+        "Migrations are idempotent: run twice, no error"
+      ],
+      "exit_criteria": "Menu endpoint serves priced items from CSV data on the deployed orchestrator"
+    },
+    {
+      "id": 3,
+      "name": "browser-use stealth menu scraping spike (with CSV fallback wiring)",
+      "completed": false,
+      "description": "Test the hypothesis: browser-use Stealth Mode can pull live DoorDash menu items for a SPECIFIC restaurant location. If yes, make it a menu source; if no, permanently use CSV fallback.",
+      "tasks": [
+        "Using browser-use cloud API with stealth/proxy options per docs, create a task: navigate DoorDash, set delivery address to the configured admin address, open a named restaurant's store page, extract structured menu (name, description, price, category) as JSON",
+        "Run 2 attempts against 2 restaurants; record success/failure and latency in ./docs-notes/browseruse-spike.md (short, for next loop)",
+        "Implement MenuSource interface in Go with two impls: BrowserUseSource and CsvSource; config flag MENU_SOURCE=browseruse|csv with automatic fallback to csv on scrape error/timeout (90s)"
+      ],
+      "verifications": [
+        "If spike succeeds: GET /internal/menu?restaurant=X&source=browseruse returns live-scraped items for a real location",
+        "With MENU_SOURCE=browseruse and network failure simulated, the endpoint still returns CSV data (fallback proven)",
+        "Spike verdict (success/failure, latency) recorded in ./docs-notes/browseruse-spike.md"
+      ],
+      "exit_criteria": "Menu endpoint works with fallback proven; spike verdict documented"
+    },
+    {
+      "id": 4,
+      "name": "Order state machine + budget engine (Go core)",
+      "completed": false,
+      "description": "The heart of the orchestrator. This IS the code worth testing across loop runs.",
+      "tasks": [
+        "Implement states OPEN → COLLECTING → GRACE → MINTING → SUBMITTING → DECLINED_PROOF_CAPTURED → CLOSED, plus CANCELLED; transitions triggered by: all-confirmed, timer expiry, grace expiry",
+        "Fair budget split in cents with remainder buffer; per-participant cart total validation against share",
+        "Enforce $300 (30000 cents) max order total at creation AND at mint time",
+        "Timer + 2-minute grace implemented as persisted deadlines (survive restart) with a ticker loop, not in-memory sleeps",
+        "Allow confirmed participants to unconfirm/modify any time before GRACE ends; re-entering modification during GRACE does not extend it",
+        "Go tests ONLY for: state transitions, budget split math, $300 cap, grace-period timing (with injected clock), cart-over-budget rejection"
+      ],
+      "verifications": [
+        "`go test ./...` passes",
+        "Restart-resilience: create an order with a 1-minute timer, kill and restart the server mid-timer, order still transitions to GRACE then MINTING on schedule"
+      ],
+      "exit_criteria": "go test passes; restart-resilience check demonstrated against local server"
+    },
+    {
+      "id": 5,
+      "name": "Slack integration (commands, announcement, DMs)",
+      "completed": false,
+      "description": "Slash command intake, announcement-menu message with live updates, and per-participant DM channels the agents will use.",
+      "tasks": [
+        "Handle /begin-order: parse users (@mentions), budget, restaurant name, optional timer (e.g. `/begin-order @a @b $40 McDonald's 15m`); agent-style lenient parsing — use glm-5.2 via OpenRouter to interpret free-form command text into structured {users, budget, restaurant, timer}",
+        "Authorize: only admins (from admins table / admin panel) may begin orders; reject budgets > $300",
+        "Post announcement message in the admin-specified channel using Block Kit: restaurant, budget, participant checklist (⏳/✅ per user), countdown deadline; store channel_id+ts for updates",
+        "chat.update the announcement on every confirm/unconfirm/state change (COLLECTING → GRACE → MINTING → attempt result)",
+        "Open a DM (conversations.open) per participant and post the intro message; record dm_channel_id for the agent to take over",
+        "Verify Slack request signatures on the events/commands endpoint"
+      ],
+      "verifications": [
+        "In the real workspace: /begin-order with 2 test users produces the announcement in the channel",
+        "Confirming a participant via curl to the internal confirm endpoint visibly updates the announcement checklist within 5s",
+        "Both participants received DMs",
+        "Signature verification rejects a forged request with 401"
+      ],
+      "exit_criteria": "Live demo in rain-hackathon-sand workspace of command → announcement → DM → checklist update"
+    },
+    {
+      "id": 6,
+      "name": "Participant agent image + Kubernetes deployment",
+      "completed": false,
+      "description": "Per-participant goose agent that converses in the Slack DM, uses orchestrator tools, and enforces the sub-budget.",
+      "tasks": [
+        "Build agent image FROM ghcr.io/aaif-goose/goose:sha-86eec2a: goose config pointing at OpenRouter (OPENROUTER_API_KEY, model z-ai/glm-5.2), plus an extension/MCP or wrapper exposing tools: list_menu, search_menu, get_budget, get_cart, add_item, remove_item, propose_confirmation, submit_confirmation — all HTTP calls to ORCHESTRATOR_URL",
+        "Slack DM bridge: wrapper long-polls/socket-modes the DM channel, feeds user messages to goose, posts goose replies back to the DM",
+        "System prompt: you are a food-ordering assistant; budget = share_cents; always keep cart ≤ budget, suggest removals if over; when user agrees, call propose_confirmation then submit_confirmation on explicit yes; user may return to modify later",
+        "Push image to registry.digitalocean.com/rainxyzhackathon2026/agent:<git-sha>",
+        "Orchestrator spawns one k8s Job per participant on order creation (client-go or kubectl-apply with templated manifest; kubeconfig mounted/burned into orchestrator env as base64 var since orchestrator runs on Railway); Jobs get env: ORDER_ID, PARTICIPANT ids, DM channel, tokens; TTL cleanup after order CLOSED",
+        "Cap: agents fit on 3 nodes; set modest resource requests (e.g. 250m CPU / 512Mi)"
+      ],
+      "verifications": [
+        "kubectl get jobs shows one Running job per participant after /begin-order",
+        "Scripted DM 'what can I get for $10?' gets a reply with real menu items under $10",
+        "Scripted DM 'add fries' updates the cart in Postgres (verified via SQL/API)",
+        "Scripted DM 'yes' on confirmation marks the participant confirmed and the announcement checklist updates",
+        "Pod logs show z-ai/glm-5.2 usage"
+      ],
+      "exit_criteria": "End-to-end DM conversation with a live agent pod results in a confirmed cart within budget"
+    },
+    {
+      "id": 7,
+      "name": "Rain card minting + decline-proof capture",
+      "completed": false,
+      "description": "Mint a Rain card for the final order total after grace; persist all evidence, since the decline is a demo feature. This is also where Rain agent-control-layer rules and the Monad angle live.",
+      "tasks": [
+        "Study https://rain-sandbox-trial.mintlify.site + the agent control layer post; implement Rain client: create card under RAIN_TEAM_ID/RAIN_USER_ID with COLLATERAL_CONTRACT_ID, spend limit = order total, MCC/merchant rules restricted to restaurants (allowedMccs per admin-panel client rules)",
+        "Admin-panel-editable client rules (stored in settings table) are applied to card creation requests",
+        "MINTING state handler: create card, store rain_card_id + full request/response in card_attempts",
+        "Enforce $300 cap again immediately before mint",
+        "Monad bounty angle: Rain collateral contracts settle on-chain — surface the COLLATERAL_CONTRACT_ID / on-chain collateral linkage (address, chain, tx/contract link if available from Rain API) in the order record and UI; document the x402/Monad narrative in ./docs-notes/monad.md for the next loop to build on (e.g. optional x402 payment header flow or Foundry-deployed receipt contract on Monad testnet if time allows)",
+        "Handle Rain API errors with retry-once then mark order FAILED with evidence"
+      ],
+      "verifications": [
+        "Triggering MINTING on a test order creates a real card in Rain sandbox (GET /v1/issuing/cards shows it) with correct limit and rules",
+        "card_attempts row contains full request/response JSON",
+        "Changing an admin-panel rule and minting again produces an observable difference in the card object"
+      ],
+      "exit_criteria": "Card visible in Rain sandbox with order-derived limit + rules; evidence row persisted"
+    },
+    {
+      "id": 8,
+      "name": "DoorDash Drive sandbox submission + declined-order proof",
+      "completed": false,
+      "description": "Submit the composed group order through DoorDash Drive sandbox with the minted card; capture the decline as proof.",
+      "tasks": [
+        "Implement Drive client (JWT auth from milestone 0): create delivery/quote → accept → submit, using admin-panel delivery address and the aggregated cart as items metadata",
+        "Attach Rain card details as the payment method to the extent the sandbox permits; where Drive sandbox does not accept raw card payment, simulate the charge by creating a Rain transaction/authorization against the card for the order total so a real DECLINE event exists (dummy cards decline) — record which path was taken",
+        "SUBMITTING state handler: perform attempt, store full request/response + decline evidence in card_attempts, transition to DECLINED_PROOF_CAPTURED then CLOSED",
+        "Update Slack announcement with final status: '💳 Card minted → 🛵 order submitted → ❌ declined (by design) — see proof page'"
+      ],
+      "verifications": [
+        "A full test order reaches CLOSED with a DoorDash sandbox delivery id recorded",
+        "Decline evidence JSON is non-empty in card_attempts",
+        "Slack announcement shows the final status line",
+        "GET /api/orders/{id}/proof returns the structured evidence"
+      ],
+      "exit_criteria": "Order row shows DECLINED_PROOF_CAPTURED with both DoorDash and Rain evidence persisted"
+    },
+    {
+      "id": 9,
+      "name": "Frontend: admin panel, past orders, live order websocket",
+      "completed": false,
+      "description": "Vite + React app on Railway talking to the orchestrator over HTTP + websocket.",
+      "tasks": [
+        "Basic HTTP auth middleware (carson/1234) on admin routes — enforced by the orchestrator API, not just the SPA",
+        "Admin panel: edit Rain client rules, set delivery address, manage admins/order-creators (Slack user picker from users.list)",
+        "Past orders page: list CLOSED/CANCELLED orders with totals, participants, and the decline-proof detail view (request/response JSON, card id, timestamps) — this is the showcase feature",
+        "Current order page: websocket (/ws?order_id=...) live view of participants, carts, confirm status, state, countdowns; reconnect logic",
+        "Deploy to Railway frontend service; point at orchestrator public URL"
+      ],
+      "verifications": [
+        "curl without auth on an admin API route returns 401; with carson:1234 returns 200",
+        "Browser smoke (Playwright or browser-use): log in, change address, GET settings reflects the change",
+        "With current-order page open, adding a cart item via API updates the page over websocket without refresh within 5s",
+        "Past order detail shows the decline-proof JSON"
+      ],
+      "exit_criteria": "All three pages functional against the deployed orchestrator with live websocket updates"
+    },
+    {
+      "id": 10,
+      "name": "Full end-to-end test with simulated humans (handoff gate)",
+      "completed": false,
+      "description": "ABSOLUTE LAST STEP. Prove the entire cohesive flow works without real human input by mocking/imitating humans, then hand off.",
+      "tasks": [
+        "Build ./scripts/e2e.sh + a small Go/Node driver that simulates humans: (a) admin runs /begin-order (post via Slack API as the authed user or invoke the command endpoint with a validly-signed payload) for 2-3 participants, $40 budget, a CSV-known restaurant, 3m timer; (b) each 'participant' is simulated by posting scripted-but-conversational messages into their DM channel (as the authed org user or via test tokens): browse, ask for suggestion, add items, go over budget once (expect agent pushback), settle, confirm; one participant modifies after confirming to prove re-open works",
+        "Let the timer expire for one lagging participant to prove timer path; observe the 2-minute grace, modify during grace, then observe mint → DoorDash attempt → decline proof",
+        "Assert programmatically: announcement message text progressed through all states; every cart ≤ share; total ≤ $300; Rain card exists with correct limit; card_attempts has DoorDash + decline evidence; frontend past-orders shows the run; websocket emitted cart events (capture during run)",
+        "Record the run: save announcement permalink, order id, card id, proof JSON into ./docs-notes/e2e-run.md for demo day",
+        "Idempotency: run e2e.sh twice back-to-back; second run must also pass (no unique-constraint or stale-state failures)"
+      ],
+      "verifications": [
+        "./scripts/e2e.sh exits 0 against the DEPLOYED (Railway + k8s) stack",
+        "Announcement message text progressed through all states",
+        "Every cart <= share and total <= $300",
+        "Rain card exists with correct limit; card_attempts has DoorDash + decline evidence",
+        "Frontend past-orders shows the run; websocket cart events were captured during the run",
+        "Artifacts (announcement permalink, order id, card id, proof JSON) written to ./docs-notes/e2e-run.md",
+        "Second consecutive run of e2e.sh also exits 0"
+      ],
+      "exit_criteria": "Two consecutive green e2e runs against production infrastructure; artifacts saved; project ready for human demo"
+    }
+  ],
+  "ralph_loop_instructions": {
+    "on_every_loop": [
+      "Read this entire PRD.JSON first — the project.full_context section is the source of truth.",
+      "Run ./scripts/preflight.sh if it exists; if it fails, fix environment before anything else.",
+      "Find the first milestone with completed == false; work ONLY on it; run its verifications; set completed to true with a one-line 'evidence' field describing proof; commit.",
+      "If a verification cannot pass, add a 'blockers' array entry to that milestone with what was tried — do not silently skip.",
+      "Keep notes for the next iteration in ./docs-notes/*.md, terse. No human-facing comments in code.",
+      "Never proceed to milestone 10 unless milestones 0-9 all have completed == true."
+    ]
+  }
+}
