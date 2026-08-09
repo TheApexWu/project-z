@@ -39,18 +39,33 @@ type rainClient struct {
 }
 
 // rainRules are the admin-panel client rules applied to every card creation.
-// Empty AllowedMccs omits the MCC restriction; ExpiresInDays <= 0 omits expiry;
+// Empty AllowedMccs omits the MCC restriction; no expiry rule omits expiry;
 // AmountCapCents > 0 caps the card amount below the order total (agent-control
 // program cap — the only rule visible on the Rain-side card object, via limit).
 type rainRules struct {
-	AllowedMccs    []string `json:"allowedMccs"`
-	ExpiresInDays  int      `json:"expiresInDays"`
-	AmountCapCents int      `json:"amountCapCents"`
+	AllowedMccs      []string `json:"allowedMccs"`
+	ExpiresInMinutes int      `json:"expiresInMinutes"`
+	ExpiresInDays    int      `json:"expiresInDays"`
+	AmountCapCents   int      `json:"amountCapCents"`
 }
 
 func defaultRainRules() rainRules {
 	// 5812 restaurants, 5814 fast food, 5411 grocery: food-only spend by default.
-	return rainRules{AllowedMccs: []string{"5411", "5812", "5814"}, ExpiresInDays: 30}
+	// The card only has to live long enough to place the order, so it expires in
+	// 10 minutes rather than sitting around spendable.
+	return rainRules{AllowedMccs: []string{"5411", "5812", "5814"}, ExpiresInMinutes: 10}
+}
+
+// expiry prefers ExpiresInMinutes; ExpiresInDays is kept for settings rows
+// written before the switch to minutes. Zero for both means "no expiry".
+func (r rainRules) expiry(now time.Time) time.Time {
+	switch {
+	case r.ExpiresInMinutes > 0:
+		return now.Add(time.Duration(r.ExpiresInMinutes) * time.Minute)
+	case r.ExpiresInDays > 0:
+		return now.Add(time.Duration(r.ExpiresInDays) * 24 * time.Hour)
+	}
+	return time.Time{}
 }
 
 func rainClientFromEnv() (*rainClient, error) {
@@ -110,8 +125,8 @@ func buildScopedCardRequest(amountCents int, rules rainRules, now time.Time) map
 	if len(rules.AllowedMccs) > 0 {
 		body["allowedMccs"] = rules.AllowedMccs
 	}
-	if rules.ExpiresInDays > 0 {
-		body["expiresAt"] = now.Add(time.Duration(rules.ExpiresInDays) * 24 * time.Hour).UTC().Format(time.RFC3339)
+	if expiry := rules.expiry(now); !expiry.IsZero() {
+		body["expiresAt"] = expiry.UTC().Format(time.RFC3339)
 	}
 	return body
 }
@@ -286,7 +301,7 @@ func (c *rainClient) simulateAuthorization(ctx context.Context, cardID string, a
 
 // loadRainRules overlays settings.rain_client_rules onto the defaults.
 // Explicitly empty allowedMccs means "no MCC restriction"; explicit 0
-// expiresInDays means "no expiry".
+// expiresInMinutes falls back to expiresInDays, and 0 for both means "no expiry".
 func loadRainRules(ctx context.Context, db *pgxpool.Pool) rainRules {
 	rules := defaultRainRules()
 	var raw []byte
@@ -294,15 +309,19 @@ func loadRainRules(ctx context.Context, db *pgxpool.Pool) rainRules {
 		return rules
 	}
 	var stored struct {
-		AllowedMccs    *[]string `json:"allowedMccs"`
-		ExpiresInDays  *int      `json:"expiresInDays"`
-		AmountCapCents *int      `json:"amountCapCents"`
+		AllowedMccs      *[]string `json:"allowedMccs"`
+		ExpiresInMinutes *int      `json:"expiresInMinutes"`
+		ExpiresInDays    *int      `json:"expiresInDays"`
+		AmountCapCents   *int      `json:"amountCapCents"`
 	}
 	if err := json.Unmarshal(raw, &stored); err != nil {
 		return rules
 	}
 	if stored.AllowedMccs != nil {
 		rules.AllowedMccs = *stored.AllowedMccs
+	}
+	if stored.ExpiresInMinutes != nil {
+		rules.ExpiresInMinutes = *stored.ExpiresInMinutes
 	}
 	if stored.ExpiresInDays != nil {
 		rules.ExpiresInDays = *stored.ExpiresInDays

@@ -23,13 +23,26 @@ func TestBuildScopedCardRequestAppliesRules(t *testing.T) {
 	}
 }
 
+func TestBuildScopedCardRequestExpiresInMinutes(t *testing.T) {
+	now := time.Date(2026, time.August, 9, 12, 0, 0, 0, time.UTC)
+	body := buildScopedCardRequest(4299, defaultRainRules(), now)
+	if body["expiresAt"] != "2026-08-09T12:10:00Z" {
+		t.Fatalf("expiresAt = %v, want 2026-08-09T12:10:00Z (10 minutes)", body["expiresAt"])
+	}
+	// minutes win over a legacy days value from an older settings row
+	mixed := rainRules{ExpiresInMinutes: 10, ExpiresInDays: 30}
+	if got := buildScopedCardRequest(100, mixed, now)["expiresAt"]; got != "2026-08-09T12:10:00Z" {
+		t.Fatalf("expiresAt = %v, want minutes to take precedence", got)
+	}
+}
+
 func TestBuildScopedCardRequestOmitsUnsetRules(t *testing.T) {
 	body := buildScopedCardRequest(100, rainRules{}, time.Now())
 	if _, present := body["allowedMccs"]; present {
 		t.Fatal("allowedMccs present despite empty rule")
 	}
 	if _, present := body["expiresAt"]; present {
-		t.Fatal("expiresAt present despite zero expiresInDays")
+		t.Fatal("expiresAt present despite zero expiresInMinutes and expiresInDays")
 	}
 	if body["amountInUSDCents"] != 100 {
 		t.Fatalf("amountInUSDCents = %v, want uncapped 100", body["amountInUSDCents"])

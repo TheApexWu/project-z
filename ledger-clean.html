@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rain Check — live</title>
+<!--
+  CSS TARGET for web/src/live.tsx. No stepper, no explainers — every caption that was teaching
+  the viewer has been removed, because the pitch says those things out loud. What is left is the
+  data and the one distinction that has to be legible without narration: which rules Rain enforces
+  and which the ledger holds.
+  Sized to sit in a ~60% pane beside Slack. Zero external requests.
+-->
+<style>
+  :root{
+    --paper:#EFEBE2; --sheet:#FAF7F1; --ink:#16202B; --soft:#5A6068; --faint:#8C8880;
+    --rule:#D9D2C6; --hair:#E7E1D5;
+    --indigo:#2F6E8F;   /* our ledger — brand blue */
+    --verm:#B23A2E;     /* Rain, and the decline — brand seal */
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:"Helvetica Neue",Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);
+       -webkit-font-smoothing:antialiased}
+  .sheet{background:var(--sheet);min-height:100vh;padding:22px 26px 26px;
+         box-shadow:0 0 0 1px var(--rule)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+  /* masthead */
+  .top{display:flex;align-items:center;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:11px}
+  .brand{font-family:var(--sans);font-weight:700;letter-spacing:.16em;font-size:13px}
+  .mark{flex:0 0 auto;margin-right:-6px}
+  .rest{font-size:25px;margin-left:auto;letter-spacing:-.2px}
+  .state{font-family:var(--sans);font-size:11px;letter-spacing:.14em;background:var(--ink);
+         color:var(--sheet);padding:3px 9px}
+  .clock{font-family:var(--mono);font-size:25px;letter-spacing:-1px;min-width:86px;text-align:right}
+  .clocklbl{font-family:var(--sans);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .state.grace{background:var(--verm)}
+
+  /* two columns */
+  .cols{display:grid;grid-template-columns:1fr 372px;gap:0;margin-top:18px}
+  .left{padding-right:26px}
+  .right{padding-left:26px;border-left:1px solid var(--rule)}
+  h2{font-size:19px;margin:0 0 12px;font-weight:400;letter-spacing:-.2px;
+     padding-bottom:6px;border-bottom:1.5px solid currentColor}
+  h2.ours{color:var(--indigo)} h2.rain{color:var(--verm)}
+
+  /* the ledger */
+  table{width:100%;border-collapse:collapse}
+  th{font-family:var(--sans);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+     color:var(--faint);font-weight:600;text-align:right;padding:0 0 6px}
+  th.l{text-align:left}
+  td{padding:7px 0;border-bottom:1px solid var(--hair);text-align:right;font-size:16px}
+  td.l{text-align:left}
+  .who{font-size:17px}
+  .cart{display:block;font-family:var(--sans);font-size:11px;color:var(--faint);margin-top:1px}
+  .pos{color:var(--indigo)} .neg{color:var(--faint)}
+  tr.sum td{border-bottom:0;border-top:1px solid var(--rule);font-style:italic;color:var(--soft);font-size:14.5px}
+  tr.total td{border-top:2px solid var(--ink);border-bottom:0;font-weight:600;font-style:normal;color:var(--ink);font-size:16px}
+  .flag{display:inline-block;font-family:var(--sans);font-size:9.5px;letter-spacing:.08em;
+        color:var(--faint);border:1px solid var(--rule);padding:0 4px;margin-left:6px;vertical-align:2px}
+
+  /* the total */
+  .grand{display:flex;align-items:baseline;gap:16px;margin-top:16px}
+  .grand .big{font-size:64px;letter-spacing:-3px;line-height:.95}
+  .grand .of{font-size:15px;color:var(--soft)}
+
+  /* the card */
+  .card{background:#16202B;color:var(--sheet);padding:14px 16px;margin-top:2px}
+  .card .hd{display:flex;justify-content:space-between;font-family:var(--sans);font-size:10px;
+            letter-spacing:.12em;color:#9A9C9E;padding-bottom:10px;border-bottom:1px solid #2E3945}
+  .card .amt{font-size:38px;letter-spacing:-2px;padding:12px 0 2px}
+  .card .uuid{font-family:var(--mono);font-size:10.5px;color:#8A8F94}
+  .card .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid #2E3945}
+  .card .k{font-family:var(--sans);font-size:10px;letter-spacing:.09em;color:#9A9C9E}
+  .card .v{font-family:var(--mono);font-size:21px;margin-top:3px}
+  .card .by{font-family:var(--sans);font-size:10px;margin-top:4px}
+  .by.rain{color:#E4674F} .by.ours{color:#9A9C9E}
+
+  /* the tape */
+  .tape{margin-top:22px}
+  .tape h3{font-family:var(--sans);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+           color:var(--verm);margin:0 0 8px;font-weight:600}
+  .tape table td{font-size:14px;padding:7px 0}
+  .ev{font-family:var(--mono);font-size:13px}
+  .lit{font-family:var(--mono);font-size:14.5px}
+  .lit.dec{color:var(--verm)}
+  .sp{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:14px;color:var(--soft)}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="top">
+    <svg class="mark" width="26" height="28" viewBox="0 0 112 120" aria-hidden="true">
+      <path d="M56 6 C56 6 18 52 18 78 a38 38 0 0 0 76 0 C94 52 56 6 56 6 Z"
+            fill="none" stroke="#16202B" stroke-width="9" stroke-linejoin="round"/>
+      <path d="M35 78 L51 95 L85 55" fill="none" stroke="#B23A2E" stroke-width="11" stroke-linecap="square"/>
+    </svg>
+    <span class="brand">RAIN CHECK</span>
+    <span class="state" id="state">COLLECTING</span>
+    <span class="rest">McDonald's</span>
+    <span class="clocklbl">window closes in</span><span class="clock" id="clock">2:41</span>
+  </div>
+
+  <div class="cols">
+
+    <!-- LEFT: the ledger -->
+    <div class="left">
+      <h2 class="ours">Rain Check ledger enforces the amount</h2>
+      <table>
+        <tr>
+          <th class="l">account</th><th>sub-budget</th><th>trade</th>
+          <th>allowance</th><th>spent</th><th>unspent</th>
+        </tr>
+        <tr>
+          <td class="l"><span class="who">Demo User</span><span class="cart">Big Mac $8.99</span></td>
+          <td class="num">$10.00</td><td class="num neg">&minus;$1.48</td>
+          <td class="num">$8.52</td><td class="num">$8.99</td><td class="num">$0.00</td>
+        </tr>
+        <tr>
+          <td class="l"><span class="who">Alex Wu</span><span class="cart">Big Mac $8.99 · Fries $2.49</span></td>
+          <td class="num">$10.00</td><td class="num pos">+$1.48</td>
+          <td class="num">$11.48</td><td class="num">$11.48</td><td class="num">$0.00</td>
+        </tr>
+        <tr class="sum">
+          <td class="l">unallocated pool</td>
+          <td class="num">$20.00</td><td class="num">$0.00</td>
+          <td class="num">$20.00</td><td class="num">$20.48</td><td class="num">$3.03</td>
+        </tr>
+        <tr class="total">
+          <td class="l">control total — admin cap</td>
+          <td class="num">$30.00</td><td class="num">$0.00</td>
+          <td class="num">$30.00</td><td class="num">$25.96</td><td class="num">$4.04</td>
+        </tr>
+      </table>
+
+      <div class="grand">
+        <span class="big num">$25.96</span>
+        <span class="of">of a $30.00 cap<br>trade column foots to $0.00</span>
+      </div>
+
+      <div class="tape">
+        <h3>authorization tape · Rain's record</h3>
+        <table>
+          <tr><th class="l">seq</th><th class="l">event</th><th class="l">mcc</th>
+              <th class="l">Rain literal</th><th>spendingPower</th></tr>
+          <tr>
+            <td class="l ev">01</td><td class="l ev">declined</td><td class="l ev">5999</td>
+            <td class="l lit dec">scoped_card_mcc_not_allowed</td><td class="sp">529 803</td>
+          </tr>
+          <tr>
+            <td class="l ev">02</td><td class="l ev">authorized</td><td class="l ev">5814</td>
+            <td class="l lit">$25.96</td><td class="sp">527 207</td>
+          </tr>
+          <tr>
+            <td class="l ev">03</td><td class="l ev">settled</td><td class="l ev">5814</td>
+            <td class="l lit">completionReason "settlement"</td><td class="sp">527 207</td>
+          </tr>
+          <tr>
+            <td class="l ev">04</td><td class="l ev">reversed</td><td class="l ev">5814</td>
+            <td class="l lit">completionReason "authorization_reversal"</td><td class="sp">527 756</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT: the credential -->
+    <div class="right">
+      <h2 class="rain">Rain enforces the category</h2>
+
+      <div class="card">
+        <div class="hd"><span>SCOPED CARD · SINGLE USE</span><span>canceled</span></div>
+        <div class="amt num">$25.96</div>
+        <div class="uuid">f09507ba · last4 0224</div>
+        <div class="grid">
+          <div>
+            <div class="k">AMOUNT</div>
+            <div class="v">$25.96</div>
+            <div class="by ours">our ledger</div>
+          </div>
+          <div>
+            <div class="k">CATEGORY</div>
+            <div class="v">5814</div>
+            <div class="by rain">Rain enforces</div>
+          </div>
+        </div>
+      </div>
+
+      <table style="margin-top:20px">
+        <tr><td class="l" style="font-size:14.5px">limit read back</td>
+            <td class="num" style="font-size:14.5px">1126 allTime</td></tr>
+        <tr><td class="l" style="font-size:14.5px">we requested</td>
+            <td class="num" style="font-size:14.5px">2596</td></tr>
+        <tr><td class="l" style="font-size:14.5px">lifetime</td>
+            <td class="num" style="font-size:14.5px">1 authorization</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<script>
+// mock only — the real view derives this from timer_deadline / grace_deadline with a
+// server-time offset (see useCountdown in web/src/live.tsx). Shown here so the tick is visible.
+let left = 161;                     // 2:41
+const clock = document.getElementById('clock');
+const state = document.getElementById('state');
+setInterval(() => {
+  if (left <= 0) return;
+  left--;
+  const m = Math.floor(left / 60), s = String(left % 60).padStart(2, '0');
+  clock.textContent = `${m}:${s}`;
+  if (left === 0) { state.textContent = 'GRACE'; state.classList.add('grace'); }
+}, 1000);
+</script>
+</body>
+</html>

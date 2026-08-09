@@ -345,7 +345,7 @@ func (e *orderEngine) submitOrder(ctx context.Context, orderID string, attemptID
 	deliveryID := "gg-" + orderID
 	drive, err := e.doordash.submitDelivery(ctx, deliveryID, restaurant, pickup, dropoff, totalCents, items)
 	drive.Response["payment_path"] = "rain_simulated_authorization"
-	drive.Response["payment_note"] = "Drive sandbox cannot take a raw card payment; the DoorDash charge is simulated as a Rain authorization against the minted card, which declines by design (dummy card)."
+	drive.Response["payment_note"] = "Drive sandbox cannot take a raw card payment; the DoorDash charge is simulated as a Rain authorization against the minted card."
 	if _, dbErr := e.db.Exec(ctx, `UPDATE card_attempts SET doordash_request = $2, doordash_response = $3, doordash_delivery_id = $4 WHERE id = $1`, attemptID, drive.Request, drive.Response, drive.DeliveryID); dbErr != nil {
 		fmt.Printf("record doordash evidence for order %s failed: %v\n", orderID, dbErr)
 	}

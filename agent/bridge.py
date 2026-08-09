@@ -161,7 +161,10 @@ def main():
         if state and state not in ("COLLECTING", "GRACE"):
             log(f"order state is {state}; shutting down")
             try:
-                post_message(f"This group order has closed (status: {state}). Thanks for ordering!")
+                if state in ("CANCELLED", "FAILED"):
+                    post_message(f"This group order has closed (status: {state}).")
+                else:
+                    post_message("Your order is in! 🛵 The group order is being submitted — thanks for ordering.")
             except Exception as error:
                 log(f"closing message failed: {error}")
             return

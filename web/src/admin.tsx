@@ -4,7 +4,7 @@ import { api, getAuth, setAuth, clearAuth, cents } from './api'
 interface Settings {
   rain_client_rules: {
     allowedMccs?: string[]
-    expiresInDays?: number
+    expiresInMinutes?: number
     amountCapCents?: number
   }
   delivery_address: string
@@ -29,7 +29,7 @@ export default function AdminPanel() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [address, setAddress] = useState('')
   const [mccs, setMccs] = useState('')
-  const [expiresInDays, setExpiresInDays] = useState(0)
+  const [expiresInMinutes, setExpiresInMinutes] = useState(0)
   const [amountCapCents, setAmountCapCents] = useState(0)
   const [saved, setSaved] = useState('')
   const [admins, setAdmins] = useState<Admin[]>([])
@@ -50,7 +50,7 @@ export default function AdminPanel() {
     setSettings(s)
     setAddress(s.delivery_address || '')
     setMccs((s.rain_client_rules?.allowedMccs || []).join(', '))
-    setExpiresInDays(s.rain_client_rules?.expiresInDays || 0)
+    setExpiresInMinutes(s.rain_client_rules?.expiresInMinutes || 0)
     setAmountCapCents(s.rain_client_rules?.amountCapCents || 0)
     if (adminsRes.ok) setAdmins((await adminsRes.json()).admins || [])
     if (usersRes.ok) setUsers((await usersRes.json()).users || [])
@@ -78,7 +78,7 @@ export default function AdminPanel() {
     setSaved('')
     const rules: Record<string, unknown> = {
       allowedMccs: mccs.split(',').map((m) => m.trim()).filter(Boolean),
-      expiresInDays: Number(expiresInDays) || 0,
+      expiresInMinutes: Number(expiresInMinutes) || 0,
       amountCapCents: Number(amountCapCents) || 0,
     }
     const res = await api('/api/settings', {
@@ -112,7 +112,7 @@ export default function AdminPanel() {
   if (!authed) {
     return (
       <section className="card narrow">
-        <h2>Admin login</h2>
+        <h2 className="ours">Admin login</h2>
         <form onSubmit={login}>
           <label>Username <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus /></label>
           <label>Password <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
@@ -131,7 +131,7 @@ export default function AdminPanel() {
   return (
     <section>
       <div className="card">
-        <h2>Order settings</h2>
+        <h2 className="ours">Order settings</h2>
         <form onSubmit={saveSettings}>
           <label>Delivery address
             <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="1 Hackathon Way, San Francisco, CA 94105" />
@@ -141,8 +141,8 @@ export default function AdminPanel() {
             <label>Allowed MCCs (comma-separated)
               <input value={mccs} onChange={(e) => setMccs(e.target.value)} placeholder="5411, 5812, 5814" />
             </label>
-            <label>Card expiry (days, 0 = Rain default)
-              <input type="number" min={0} value={expiresInDays} onChange={(e) => setExpiresInDays(Number(e.target.value))} />
+            <label>Card expiry (minutes, 0 = no expiry)
+              <input type="number" min={0} value={expiresInMinutes} onChange={(e) => setExpiresInMinutes(Number(e.target.value))} />
             </label>
             <label>Spend cap per card (cents, 0 = order total)
               <input type="number" min={0} value={amountCapCents} onChange={(e) => setAmountCapCents(Number(e.target.value))} />
@@ -154,14 +154,14 @@ export default function AdminPanel() {
       </div>
 
       <div className="card">
-        <h2>Admins &amp; order creators</h2>
+        <h2 className="ours">Admins &amp; order creators</h2>
         <table>
-          <thead><tr><th>Slack user</th><th>Can create orders</th><th></th></tr></thead>
+          <thead><tr><th className="l">slack user</th><th className="l">can create orders</th><th></th></tr></thead>
           <tbody>
             {admins.map((admin) => (
               <tr key={admin.slack_user_id}>
-                <td><code>{admin.slack_user_id}</code>{users.find((u) => u.id === admin.slack_user_id)?.real_name ? ` — ${users.find((u) => u.id === admin.slack_user_id)?.real_name}` : ''}</td>
-                <td><input type="checkbox" checked={admin.can_create_orders} onChange={() => toggleAdmin(admin)} /></td>
+                <td className="l"><code>{admin.slack_user_id}</code>{users.find((u) => u.id === admin.slack_user_id)?.real_name ? ` — ${users.find((u) => u.id === admin.slack_user_id)?.real_name}` : ''}</td>
+                <td className="l"><input type="checkbox" checked={admin.can_create_orders} onChange={() => toggleAdmin(admin)} /></td>
                 <td><button className="link" onClick={() => removeAdmin(admin)}>remove</button></td>
               </tr>
             ))}

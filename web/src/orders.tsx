@@ -27,6 +27,11 @@ interface Proof {
   }
 }
 
+function orderIdFromHash(): string | null {
+  const m = window.location.hash.match(/^#\/orders\/([0-9a-fA-F-]{36})$/)
+  return m ? m[1] : null
+}
+
 function JsonBlock({ title, value }: { title: string; value: unknown }) {
   return (
     <details className="json-block">
@@ -36,6 +41,10 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
   )
 }
 
+function cartTotal(cart: { price_cents: number; quantity: number }[] = []): number {
+  return cart.reduce((sum, item) => sum + item.price_cents * item.quantity, 0)
+}
+
 function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [proof, setProof] = useState<Proof | null>(null)
   const [error, setError] = useState('')
@@ -43,7 +52,7 @@ function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   useEffect(() => {
     api(`/api/orders/${id}/proof`).then(async (res) => {
       if (!res.ok) {
-        setError(`Failed to load proof: ${res.status}`)
+        setError(`Failed to load receipt: ${res.status}`)
         return
       }
       setProof(await res.json())
@@ -51,58 +60,128 @@ function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
   }, [id])
 
   if (error) return <p className="error">{error}</p>
-  if (!proof) return <p>Loading…</p>
+  if (!proof) return <p className="muted">Loading…</p>
 
   const attempt = proof.card_attempt
+  const settled = proof.state === 'CLOSED' || proof.state === 'DECLINED_PROOF_CAPTURED'
+  const pool = proof.budget_cents - (proof.participants || []).reduce((sum, p) => sum + p.share_cents, 0)
+
   return (
     <section>
-      <button className="link" onClick={onBack}>← all orders</button>
-      <div className="card">
-        <h2>{proof.restaurant} <span className={`badge state-${proof.state}`}>{proof.state}</span></h2>
-        <p className="muted">Order <code>{proof.order_id}</code></p>
-        <div className="stats">
-          <div><strong>{cents(proof.total_cents)}</strong><span>total</span></div>
-          <div><strong>{cents(proof.budget_cents)}</strong><span>budget</span></div>
-          <div><strong>{proof.participants?.length ?? 0}</strong><span>participants</span></div>
-          {attempt && <div><strong>{cents(attempt.amount_cents)}</strong><span>card amount</span></div>}
-        </div>
-        {proof.collateral_contract_id && (
-          <p className="muted">Rain collateral contract: <code>{proof.collateral_contract_id}</code>{proof.collateral_chain ? ` (${proof.collateral_chain})` : ''}</p>
-        )}
+      <div className="sheettop">
+        <span className={`badge state-${proof.state}`}>{proof.state}</span>
+        <span className="rest">{proof.restaurant}</span>
+        <span className="clocklbl">{new Date(proof.created_at).toLocaleString()}</span>
       </div>
 
-      {attempt && (
-        <div className="card decline-proof">
-          <h2>Decline proof</h2>
-          <p>
-            Rain card <code>{attempt.rain_card_id}</code> was charged {cents(attempt.amount_cents)} via{' '}
-            <code>{attempt.payment_path || 'unknown'}</code> and the payment was{' '}
-            <strong className="error">declined by design</strong>
-            {attempt.declined_at && <> at {new Date(attempt.declined_at).toLocaleString()}</>}.
-          </p>
-          {attempt.doordash_delivery_id && <p className="muted">DoorDash sandbox delivery: <code>{attempt.doordash_delivery_id}</code></p>}
-          <JsonBlock title="Rain card creation request" value={attempt.rain_request} />
-          <JsonBlock title="Rain card creation response" value={attempt.rain_response} />
-          <JsonBlock title="DoorDash submission request" value={attempt.doordash_request} />
-          <JsonBlock title="DoorDash submission response (incl. decline)" value={attempt.doordash_response} />
-        </div>
-      )}
+      <button className="link" onClick={onBack}>← all orders</button>
 
-      <div className="card">
-        <h2>Participants</h2>
-        <table>
-          <thead><tr><th>User</th><th>Share</th><th>Confirmed</th><th>Cart</th></tr></thead>
-          <tbody>
-            {proof.participants?.map((p) => (
-              <tr key={p.slack_user_id}>
-                <td><code>{p.slack_user_id}</code></td>
-                <td>{cents(p.share_cents)}</td>
-                <td>{p.confirmed ? '✅' : '—'}</td>
-                <td>{p.cart?.map((item, i) => <div key={i}>{item.quantity}× {item.name} ({cents(item.price_cents)})</div>)}</td>
+      <div className="cols">
+        <div className="left">
+          {settled && <p className="settled">Order received — card charged and delivery submitted.</p>}
+
+          <h2 className="ours">Rain Check ledger enforces the amount</h2>
+          <table>
+            <thead>
+              <tr><th className="l">account</th><th>sub-budget</th><th>spent</th><th>unspent</th></tr>
+            </thead>
+            <tbody>
+              {(proof.participants || []).map((p) => {
+                const spent = cartTotal(p.cart)
+                return (
+                  <tr key={p.slack_user_id}>
+                    <td className="l">
+                      <span className="who">{p.slack_user_id}</span>
+                      <span className={`flag${p.confirmed ? ' confirmed' : ''}`}>{p.confirmed ? 'confirmed' : 'never confirmed'}</span>
+                      <span className="cart">
+                        {!p.cart || p.cart.length === 0
+                          ? 'cart is empty'
+                          : p.cart.map((item) => `${item.quantity}× ${item.name} ${cents(item.price_cents * item.quantity)}`).join(' · ')}
+                      </span>
+                    </td>
+                    <td className="num">{cents(p.share_cents)}</td>
+                    <td className="num">{cents(spent)}</td>
+                    <td className="num">{cents(p.share_cents - spent)}</td>
+                  </tr>
+                )
+              })}
+              {pool > 0 && (
+                <tr className="sum">
+                  <td className="l">unallocated pool</td>
+                  <td className="num">{cents(pool)}</td>
+                  <td className="num">{cents(0)}</td>
+                  <td className="num">{cents(pool)}</td>
+                </tr>
+              )}
+              <tr className="total">
+                <td className="l">control total — admin cap</td>
+                <td className="num">{cents(proof.budget_cents)}</td>
+                <td className="num">{cents(proof.total_cents)}</td>
+                <td className="num">{cents(proof.budget_cents - proof.total_cents)}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+
+          <div className="grand">
+            <span className="big num">{cents(proof.total_cents)}</span>
+            <span className="of">
+              of a {cents(proof.budget_cents)} cap<br />
+              order <span className="num">{proof.order_id.slice(0, 8)}</span>
+            </span>
+          </div>
+
+          {attempt && (
+            <div className="tape">
+              <h3>authorization tape · Rain&rsquo;s record</h3>
+              <JsonBlock title="Rain card creation response" value={attempt.rain_response} />
+              <JsonBlock title="DoorDash submission response" value={attempt.doordash_response} />
+            </div>
+          )}
+        </div>
+
+        <div className="right">
+          {attempt ? (
+            <>
+              <h2 className="rain">Rain credential</h2>
+              <div className="credential">
+                <div className="hd"><span>SCOPED CARD · SINGLE USE</span><span>{attempt.declined_at ? 'charged' : 'open'}</span></div>
+                <div className="amt">{cents(attempt.amount_cents)}</div>
+                <div className="uuid">{attempt.rain_card_id || '—'}</div>
+                <div className="grid">
+                  <div>
+                    <div className="k">AMOUNT</div>
+                    <div className="v">{cents(attempt.amount_cents)}</div>
+                    <div className="by ours">our ledger</div>
+                  </div>
+                  <div>
+                    <div className="k">PAYMENT PATH</div>
+                    <div className="v">{attempt.payment_path || '—'}</div>
+                    <div className="by rain">Rain enforces</div>
+                  </div>
+                </div>
+              </div>
+
+              <table style={{ marginTop: 20 }}>
+                <tbody>
+                  {attempt.declined_at && (
+                    <tr><td className="l">charged</td><td className="num">{new Date(attempt.declined_at).toLocaleTimeString()}</td></tr>
+                  )}
+                  {attempt.doordash_delivery_id && (
+                    <tr><td className="l">delivery</td><td className="num">{attempt.doordash_delivery_id.slice(0, 20)}</td></tr>
+                  )}
+                  {proof.collateral_contract_id && (
+                    <tr><td className="l">collateral</td><td className="num">{proof.collateral_contract_id.slice(0, 8)}{proof.collateral_chain ? ` · ${proof.collateral_chain}` : ''}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <>
+              <h2 className="rain">Rain credential</h2>
+              <p className="muted">No card was minted for this order.</p>
+            </>
+          )}
+        </div>
       </div>
     </section>
   )
@@ -110,8 +189,14 @@ function OrderDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
 export default function PastOrders() {
   const [orders, setOrders] = useState<OrderSummary[]>([])
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(orderIdFromHash)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    const onHash = () => setSelected(orderIdFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   useEffect(() => {
     api('/api/orders').then(async (res) => {
@@ -123,26 +208,41 @@ export default function PastOrders() {
     })
   }, [])
 
-  if (selected) return <OrderDetail id={selected} onBack={() => setSelected(null)} />
+  const open = (id: string) => {
+    window.location.hash = `#/orders/${id}`
+    setSelected(id)
+  }
+  const back = () => {
+    window.location.hash = '#/orders'
+    setSelected(null)
+  }
+
+  if (selected) return <OrderDetail id={selected} onBack={back} />
   if (error) return <p className="error">{error}</p>
 
   const past = orders.filter((o) => TERMINAL_STATES.includes(o.state))
   return (
-    <section className="card">
-      <h2>Past orders</h2>
-      {past.length === 0 && <p>No finished orders yet.</p>}
+    <section>
+      <h2 className="ours">Past orders</h2>
+      {past.length === 0 && <p className="muted">No finished orders yet.</p>}
       <table>
-        <thead><tr><th>When</th><th>Restaurant</th><th>State</th><th>Total</th><th>Participants</th><th>Card</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th className="l">when</th><th className="l">restaurant</th><th className="l">state</th>
+            <th>total</th><th>cap</th><th>confirmed</th><th className="l">card</th><th></th>
+          </tr>
+        </thead>
         <tbody>
           {past.map((order) => (
             <tr key={order.id}>
-              <td>{new Date(order.created_at).toLocaleString()}</td>
-              <td>{order.restaurant}</td>
-              <td><span className={`badge state-${order.state}`}>{order.state}</span></td>
-              <td>{cents(order.total_cents)}</td>
-              <td>{order.confirmed_count}/{order.participant_count}</td>
-              <td>{order.rain_card_id ? <code>{order.rain_card_id.slice(0, 8)}…</code> : '—'}</td>
-              <td><button className="link" onClick={() => setSelected(order.id)}>proof →</button></td>
+              <td className="l"><span className="num">{new Date(order.created_at).toLocaleString()}</span></td>
+              <td className="l"><span className="who">{order.restaurant}</span></td>
+              <td className="l"><span className={`badge state-${order.state}`}>{order.state}</span></td>
+              <td className="num">{cents(order.total_cents)}</td>
+              <td className="num">{cents(order.budget_cents)}</td>
+              <td className="num">{order.confirmed_count}/{order.participant_count}</td>
+              <td className="l"><span className="num">{order.rain_card_id ? order.rain_card_id.slice(0, 8) : '—'}</span></td>
+              <td><button className="link" onClick={() => open(order.id)}>receipt →</button></td>
             </tr>
           ))}
         </tbody>

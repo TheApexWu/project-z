@@ -443,7 +443,7 @@ async function main() {
   assert(run.confirmPath === 'conversation', 'A confirmed via DM conversation', run.confirmPath)
   assert(['COLLECTING', 'GRACE', 'MINTING', 'SUBMITTING', 'CLOSED'].every((s) => run.states[s]), 'state progression COLLECTING->GRACE->MINTING->SUBMITTING->CLOSED observed', JSON.stringify(run.states))
   assert(run.annStates.COLLECTING !== undefined && run.annStates.GRACE !== undefined, 'announcement progressed COLLECTING->GRACE', JSON.stringify(run.annStates))
-  assert(/\*Status:\*\s*CLOSED/.test(run.annText) && /declined \(by design\)/.test(run.annText) && run.annText.includes(`/api/orders/${orderId}/proof`), 'announcement final text shows closed + decline-proof line', run.annText)
+  assert(/\*Status:\*\s*CLOSED/.test(run.annText) && /Order received!/.test(run.annText) && run.annText.includes(`#/orders/${orderId}`), 'announcement final text shows closed + order-received line with receipt link', run.annText)
   assert(graceEntry && graceEntry.t >= TIMER_SECONDS - 10, 'GRACE entered at timer expiry (not all-confirmed)', `t=${graceEntry?.t}s`)
   assert(graceEntry && !participantOf(graceEntry.snap, B)?.confirmed, 'B still unconfirmed at GRACE entry (timer path proven)')
   assert(run.graceModify?.stateAtModify === 'GRACE', 'cart modified during grace period', JSON.stringify(run.graceModify))

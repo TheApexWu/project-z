@@ -5,9 +5,12 @@ with participants, a total budget, and a restaurant. Each participant gets a DM
 from a dedicated AI agent (goose + z-ai/glm-5.2 via OpenRouter) that helps them
 build a sub-order within their fair share. When everyone confirms (or the timer
 expires, plus a 2-minute grace period), the orchestrator mints a Rain sandbox
-card, submits the order to the DoorDash Drive sandbox, and the payment is
-intentionally declined — the decline proof is captured and surfaced on the
-frontend.
+card, and submits the order to the DoorDash Drive sandbox. The sandbox card
+always declines (dummy card), so the charge is simulated as a Rain authorization
+— the full request/response evidence is captured and surfaced on the frontend.
+User-facing surfaces frame this expected path as success: the Slack announcement
+and live page say **"Order received!"** and link to a receipt page (in
+production, a real card would simply be accepted).
 
 ## Live system
 
@@ -61,10 +64,12 @@ In `#eats`:
    items un-confirms; confirmed users can modify until the order closes.
 4. When **all confirm** or the **timer expires**, a 2-minute grace period starts
    (modifications still allowed; grace never extends).
-5. Then: a Rain card is minted (limit = 1.2× order total), the order is
-   submitted to the DoorDash Drive sandbox, the card **declines by design**, and
-   the decline proof is captured. The announcement ends with a link to the proof
-   page.
+5. Then: a Rain card is minted (limit = 1.2× order total, expires 10 minutes
+   after issue — long enough to place the order and no longer), the order is
+   submitted to the DoorDash Drive sandbox, and the payment leg completes (the
+   sandbox card declines by design; in production it would be accepted). The
+   announcement ends with **"Order received! ✅"** and a link to the receipt
+   page with the full payment/submission evidence.
 
 State machine:
 `OPEN → COLLECTING → GRACE → MINTING → SUBMITTING → DECLINED_PROOF_CAPTURED → CLOSED`
@@ -98,7 +103,7 @@ https://frontend-production-8ae0d.up.railway.app — HTTP basic auth `carson` /
   admins/order-creators list (Slack user picker, backed by `/api/admins` and
   `/api/slack/users`).
 - **Past orders**: every order with state, totals, Rain card id, and the full
-  decline-proof JSON (`/api/orders`, `/api/orders/{id}/proof`).
+  receipt JSON (`/api/orders`, `/api/orders/{id}/proof`).
 - **Live order**: real-time cart/confirm feed over the `/ws` websocket while an
   order is collecting.
 
@@ -185,7 +190,7 @@ pull secret). The orchestrator talks to the cluster via `KUBECONFIG_B64`.
 | Signed slash command (no Slack UI)  | `python3 scripts/slack-cmd.py <url> "<command text>"`                                                     |
 | Websocket feed                      | `node scripts/ws-check.mjs`                                                                               |
 
-`e2e.sh` runs a real order through agents, card minting, and the decline proof;
+`e2e.sh` runs a real order through agents, card minting, and the receipt proof;
 it is idempotent and safe to re-run (proved twice back-to-back in milestone 10).
 
 ## Troubleshooting
@@ -245,4 +250,5 @@ API_KEYS    Local credentials (gitignored)
 - `carson_member_id` is a scratch file with the order-creator Slack ID.
 - The bridge treats any DM message it didn't post as participant input — if
   another bot/integration posts into a participant DM, the agent will answer it.
-- The DoorDash "payment" declining is the intended demo outcome, not a bug.
+- The DoorDash "payment" declining in the sandbox is the intended outcome, not a
+  bug — user-facing surfaces present the completed path as "Order received!".

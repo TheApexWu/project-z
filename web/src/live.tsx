@@ -55,42 +55,75 @@ function LiveView({ orderId }: { orderId: string }) {
     offset,
   )
 
-  if (!snapshot) return <p>Connecting to live order…</p>
+  if (!snapshot) return <p className="muted">Connecting to live order…</p>
+
+  const pool = snapshot.budget_cents - snapshot.participants.reduce((sum, p) => sum + p.share_cents, 0)
+  const settled = snapshot.state === 'CLOSED' || snapshot.state === 'DECLINED_PROOF_CAPTURED'
 
   return (
     <section>
-      <div className="card">
-        <h2>
-          {snapshot.restaurant} <span className={`badge state-${snapshot.state}`}>{snapshot.state}</span>
-          <span className={`dot ${connected ? 'dot-on' : 'dot-off'}`} title={connected ? 'live' : 'reconnecting…'} />
-        </h2>
-        <p className="muted">Order <code>{snapshot.id}</code></p>
-        <div className="stats">
-          <div><strong>{cents(snapshot.total_cents)}</strong><span>of {cents(snapshot.budget_cents)} budget</span></div>
-          <div><strong>{snapshot.participants.filter((p) => p.confirmed).length}/{snapshot.participants.length}</strong><span>confirmed</span></div>
-          {countdown && <div><strong>{countdown}</strong><span>{snapshot.state === 'GRACE' ? 'grace left' : 'time left'}</span></div>}
-        </div>
-        <div className="bar">
-          <div className="bar-fill" style={{ width: `${Math.min(100, (snapshot.total_cents / Math.max(1, snapshot.budget_cents)) * 100)}%` }} />
-        </div>
+      <div className="sheettop">
+        <span className={`state${snapshot.state === 'GRACE' ? ' grace' : ''}`}>{snapshot.state}</span>
+        <span className={`dot ${connected ? 'dot-on' : 'dot-off'}`} title={connected ? 'live' : 'reconnecting…'} />
+        <span className="rest">{snapshot.restaurant}</span>
+        {countdown && (
+          <>
+            <span className="clocklbl">{snapshot.state === 'GRACE' ? 'grace left' : 'window closes in'}</span>
+            <span className="clock num">{countdown}</span>
+          </>
+        )}
       </div>
 
-      <div className="participants">
-        {snapshot.participants.map((p) => (
-          <div className="card participant" key={p.slack_user_id}>
-            <h3>
-              <code>{p.slack_user_id}</code> {p.confirmed ? '✅' : '⏳'}
-            </h3>
-            <p className="muted">{cents(p.cart_total_cents)} of {cents(p.share_cents)} share</p>
-            <ul>
-              {p.cart.map((item, i) => (
-                <li key={i}>{item.quantity}× {item.name} — {cents(item.price_cents * item.quantity)}</li>
-              ))}
-              {p.cart.length === 0 && <li className="muted">cart is empty</li>}
-            </ul>
-          </div>
-        ))}
+      <h2 className="ours">Rain Check ledger enforces the amount</h2>
+      <table>
+        <thead>
+          <tr><th className="l">account</th><th>sub-budget</th><th>spent</th><th>unspent</th></tr>
+        </thead>
+        <tbody>
+          {snapshot.participants.map((p) => (
+            <tr key={p.slack_user_id}>
+              <td className="l">
+                <span className="who">{p.slack_user_id}</span>
+                <span className={`flag${p.confirmed ? ' confirmed' : ''}`}>{p.confirmed ? 'confirmed' : 'ordering'}</span>
+                <span className="cart">
+                  {p.cart.length === 0
+                    ? 'cart is empty'
+                    : p.cart.map((item) => `${item.quantity}× ${item.name} ${cents(item.price_cents * item.quantity)}`).join(' · ')}
+                </span>
+              </td>
+              <td className="num">{cents(p.share_cents)}</td>
+              <td className="num">{cents(p.cart_total_cents)}</td>
+              <td className="num">{cents(p.share_cents - p.cart_total_cents)}</td>
+            </tr>
+          ))}
+          {pool > 0 && (
+            <tr className="sum">
+              <td className="l">unallocated pool</td>
+              <td className="num">{cents(pool)}</td>
+              <td className="num">{cents(0)}</td>
+              <td className="num">{cents(pool)}</td>
+            </tr>
+          )}
+          <tr className="total">
+            <td className="l">control total — admin cap</td>
+            <td className="num">{cents(snapshot.budget_cents)}</td>
+            <td className="num">{cents(snapshot.total_cents)}</td>
+            <td className="num">{cents(snapshot.budget_cents - snapshot.total_cents)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="grand">
+        <span className="big num">{cents(snapshot.total_cents)}</span>
+        <span className="of">
+          of a {cents(snapshot.budget_cents)} cap<br />
+          {snapshot.participants.filter((p) => p.confirmed).length} of {snapshot.participants.length} confirmed
+        </span>
       </div>
+
+      {settled && (
+        <p className="settled">Order received — card charged and delivery submitted.</p>
+      )}
     </section>
   )
 }
@@ -115,7 +148,7 @@ export default function CurrentOrder() {
   return (
     <div>
       <div className="card row">
-        <label>Live order{' '}
+        <label>Live order
           <select value={orderId} onChange={(e) => setOrderId(e.target.value)}>
             {orderId === '' && <option value="">Select…</option>}
             {active.map((o) => <option key={o.id} value={o.id}>{o.restaurant} — {o.state} — {new Date(o.created_at).toLocaleTimeString()}</option>)}
@@ -127,7 +160,9 @@ export default function CurrentOrder() {
           <button type="submit">Watch</button>
         </form>
       </div>
-      {orderId ? <LiveView orderId={orderId} /> : <p>No active order right now. Start one with <code>/begin-order</code> in Slack.</p>}
+      {orderId
+        ? <LiveView orderId={orderId} />
+        : <p className="muted">No active order right now. Start one with <code>/begin-order</code> in Slack.</p>}
     </div>
   )
 }

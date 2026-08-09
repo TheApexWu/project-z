@@ -254,6 +254,22 @@ func logSlackError(w http.ResponseWriter, err error) {
 	json.NewEncoder(w).Encode(map[string]string{"response_type": "ephemeral", "text": "Could not start order: " + err.Error()})
 }
 
+// receiptURL points at the frontend order page; the raw proof JSON endpoint is
+// the fallback when no frontend URL is configured.
+func receiptURL(orderID string) string {
+	if base := os.Getenv("FRONTEND_PUBLIC_URL"); base != "" {
+		return strings.TrimRight(base, "/") + "/#/orders/" + orderID
+	}
+	if base := os.Getenv("RAILWAY_SERVICE_FRONTEND_URL"); base != "" {
+		base = strings.TrimPrefix(strings.TrimPrefix(strings.TrimRight(base, "/"), "https://"), "http://")
+		return "https://" + base + "/#/orders/" + orderID
+	}
+	if base := os.Getenv("ORCHESTRATOR_PUBLIC_URL"); base != "" {
+		return strings.TrimRight(base, "/") + "/api/orders/" + orderID + "/proof"
+	}
+	return ""
+}
+
 func endOrderBlock(orderID string) map[string]any {
 	return map[string]any{
 		"type": "actions",
@@ -458,7 +474,7 @@ func (e *orderEngine) announcementBlocks(ctx context.Context, orderID string) ([
 	case stateSubmitting:
 		statusDetail = "💳 Card minted → 🛵 submitting order to DoorDash…"
 	case stateDeclinedProofCaptured, stateClosed:
-		statusDetail = "💳 Card minted → 🛵 order submitted → ❌ declined (by design) — see proof page"
+		statusDetail = "💳 Card charged → 🛵 *Order received!* ✅"
 	case stateFailed:
 		statusDetail = "⚠️ Order failed — evidence recorded"
 	case stateCancelled:
@@ -480,8 +496,8 @@ func (e *orderEngine) announcementBlocks(ctx context.Context, orderID string) ([
 	}
 	if statusDetail != "" {
 		if state == stateDeclinedProofCaptured || state == stateClosed {
-			if base := os.Getenv("ORCHESTRATOR_PUBLIC_URL"); base != "" {
-				statusDetail += "\nProof: " + base + "/api/orders/" + orderID + "/proof"
+			if link := receiptURL(orderID); link != "" {
+				statusDetail += "\nReceipt: " + link
 			}
 		}
 		blocks = append(blocks, map[string]any{"type": "section", "text": map[string]string{"type": "mrkdwn", "text": statusDetail}})
