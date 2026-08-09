@@ -237,7 +237,14 @@
     {
       "id": 6,
       "name": "Participant agent image + Kubernetes deployment",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "After a signed /begin-order (U0BNZQ7KR34 + U0BPU5GU6KS, $40, McDonald's, 15m), `kubectl get jobs -l app=group-grub-agent` showed two Running jobs (agent-8c36d7c66b3741c1b4444504c1d984d0-u0bnzq7kr34 and -u0bpu5gu6ks) within 12s.",
+        "Scripted DM 'what can I get for $10?' (bot-token post into DM D0BNUA17R6F) got an agent reply listing real menu items under $10 (2 Cheeseburger Meal $6.19, Hot and Spicy McChicken Meal $5.69, French Fries $2.19, Coke $1.59).",
+        "Scripted DM 'add fries' updated Postgres: GET /internal/orders/8c36d7c6-6b37-41c1-b444-4504c1d984d0/participants/U0BNZQ7KR34/cart returned {\"items\":[{\"name\":\"French Fries\",\"price_cents\":219,\"quantity\":1}],\"total_cents\":219}.",
+        "Scripted DM 'yes' after the agent's propose_confirmation summary marked U0BNZQ7KR34 confirmed (participants.confirmed_at set, verified via SQL) and the #eats announcement checklist flipped that user to ✅ while the order stayed COLLECTING.",
+        "kubectl logs for pod agent-8c36d7c66b3741c1b4444504c1d984d0-u0bnzq7kr34-r6dcx contained 11 lines referencing openrouter/z-ai/glm-5.2 (startup plus one per goose turn)."
+      ],
       "description": "Per-participant goose agent that converses in the Slack DM, uses orchestrator tools, and enforces the sub-budget.",
       "tasks": [
         "Build agent image FROM ghcr.io/aaif-goose/goose:sha-86eec2a: goose config pointing at OpenRouter (OPENROUTER_API_KEY, model z-ai/glm-5.2), plus an extension/MCP or wrapper exposing tools: list_menu, search_menu, get_budget, get_cart, add_item, remove_item, propose_confirmation, submit_confirmation — all HTTP calls to ORCHESTRATOR_URL",
