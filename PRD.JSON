@@ -342,7 +342,16 @@
     {
       "id": 10,
       "name": "Full end-to-end test with simulated humans (handoff gate)",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "./scripts/e2e.sh exited 0 twice back-to-back against the deployed Railway + k8s stack: run 1 order f2b3783f-cde8-498d-9060-c8511384ce2b (310.7s) and run 2 order 20a4475c-dd06-490c-bd60-da7f24a5783e (309.2s), both printed 'e2e passed'.",
+        "Announcement text progressed through all states in both runs; run 2 announcement-observed: COLLECTING@0.2s -> GRACE@180.5s -> MINTING@300.6s -> SUBMITTING@302.4s -> CLOSED@304.5s, ending with 'Status: CLOSED' + the 'Card minted -> order submitted -> declined (by design) — see proof page' line and proof URL.",
+        "Every cart <= share and total <= $300 in both runs: A $11.92 of $20, B $3.78 of $20, order total 1570 cents; enforced assertions in scripts/e2e.mjs.",
+        "Run 2 Rain card 8b07a625-ba3f-4116-b2dc-159933037727 (run 1: 8da45a0a-843c-4ec8-a199-939275c99ada) exists in the sandbox with limit.amount 1884 = round(1.2 x 1570); card_attempts holds DoorDash delivery gg-<order_id>, declined_at, and the Rain decline (status=declined, account_credit_limit_exceeded) via payment_path rain_simulated_authorization.",
+        "Frontend past-orders data (/api/orders) lists each run CLOSED with its card id and the frontend serves 200; 12 websocket snapshots per run captured live including cart events and the GRACE transition.",
+        "Artifacts (announcement permalink https://rain-hackathon-sand.slack.com/archives/C0BNXRJV3AS/p1786277170666599, order id, card id, full proof JSON, simulated-human transcript, assertion table) written to ./docs-notes/e2e-run.md.",
+        "Idempotency: the second consecutive run started 35s after the first closed and also exited 0 — no unique-constraint or stale-state failures; both runs used ZERO API fallbacks (every human action went through the agent DM conversation, including over-budget pushback, DM confirm, and modify-after-confirm re-open)."
+      ],
       "description": "ABSOLUTE LAST STEP. Prove the entire cohesive flow works without real human input by mocking/imitating humans, then hand off.",
       "tasks": [
         "Build ./scripts/e2e.sh + a small Go/Node driver that simulates humans: (a) admin runs /begin-order (post via Slack API as the authed user or invoke the command endpoint with a validly-signed payload) for 2-3 participants, $40 budget, a CSV-known restaurant, 3m timer; (b) each 'participant' is simulated by posting scripted-but-conversational messages into their DM channel (as the authed org user or via test tokens): browse, ask for suggestion, add items, go over budget once (expect agent pushback), settle, confirm; one participant modifies after confirming to prove re-open works",
