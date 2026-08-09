@@ -1,0 +1,13 @@
+API_KEYS
+docker-config
+k8s*
+logs/
+.git
+docs-notes/
+scripts/
+agent/
+web/
+frontend/
+slack-app/
+*.md
+!README.md

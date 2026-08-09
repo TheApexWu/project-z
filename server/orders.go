@@ -23,6 +23,7 @@ const (
 	stateDeclinedProofCaptured = "DECLINED_PROOF_CAPTURED"
 	stateClosed                = "CLOSED"
 	stateCancelled             = "CANCELLED"
+	stateFailed                = "FAILED"
 )
 
 var (
@@ -38,6 +39,7 @@ type orderEngine struct {
 	now    clock
 	notify func(context.Context, string)
 	agents *agentSpawner
+	rain   *rainClient
 }
 
 func newOrderID() (string, error) {
@@ -72,7 +74,7 @@ func validTransition(from, to string) bool {
 	return (from == stateOpen && (to == stateCollecting || to == stateCancelled)) ||
 		(from == stateCollecting && (to == stateGrace || to == stateCancelled)) ||
 		(from == stateGrace && (to == stateMinting || to == stateCancelled)) ||
-		(from == stateMinting && (to == stateSubmitting || to == stateCancelled)) ||
+		(from == stateMinting && (to == stateSubmitting || to == stateCancelled || to == stateFailed)) ||
 		(from == stateSubmitting && to == stateDeclinedProofCaptured) ||
 		(from == stateDeclinedProofCaptured && to == stateClosed)
 }
@@ -143,10 +145,97 @@ func (e *orderEngine) tick(ctx context.Context) error {
 	if _, err := e.db.Exec(ctx, `UPDATE orders SET state = $1, updated_at = $2 WHERE state = $3 AND grace_deadline <= $2`, stateMinting, now, stateGrace); err != nil {
 		return err
 	}
+	if err := e.mintOutstanding(ctx); err != nil {
+		return err
+	}
 	for _, id := range ids {
 		e.changed(ctx, id)
 	}
 	return nil
+}
+
+// mintOutstanding claims every MINTING order that has no card attempt yet.
+// The INSERT is the claim: it runs synchronously so the next tick cannot
+// double-mint while the Rain call is in flight.
+func (e *orderEngine) mintOutstanding(ctx context.Context) error {
+	if e.rain == nil {
+		return nil
+	}
+	rows, err := e.db.Query(ctx, `SELECT o.id, COALESCE(SUM(ci.price_cents * ci.quantity), 0)
+		FROM orders o
+		LEFT JOIN participants p ON p.order_id = o.id
+		LEFT JOIN cart_items ci ON ci.participant_id = p.id
+		WHERE o.state = $1 AND NOT EXISTS (SELECT 1 FROM card_attempts ca WHERE ca.order_id = o.id)
+		GROUP BY o.id`, stateMinting)
+	if err != nil {
+		return err
+	}
+	type mintJob struct {
+		orderID string
+		total   int
+	}
+	var jobs []mintJob
+	for rows.Next() {
+		var job mintJob
+		if err := rows.Scan(&job.orderID, &job.total); err != nil {
+			rows.Close()
+			return err
+		}
+		jobs = append(jobs, job)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		var attemptID int64
+		if err := e.db.QueryRow(ctx, `INSERT INTO card_attempts (order_id, amount_cents) VALUES ($1, $2) RETURNING id`, job.orderID, job.total).Scan(&attemptID); err != nil {
+			return err
+		}
+		go e.mintOrder(context.Background(), job.orderID, attemptID, job.total)
+	}
+	return nil
+}
+
+// mintOrder runs in a goroutine after the claim; it must tolerate cancel
+// races (an admin may cancel a MINTING order while the Rain call is up).
+func (e *orderEngine) mintOrder(ctx context.Context, orderID string, attemptID int64, totalCents int) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	fail := func(evidence map[string]any, err error) {
+		if err != nil {
+			evidence["error"] = err.Error()
+		}
+		if _, dbErr := e.db.Exec(ctx, `UPDATE card_attempts SET rain_response = $2 WHERE id = $1`, attemptID, evidence); dbErr != nil {
+			fmt.Printf("record mint failure for order %s failed: %v\n", orderID, dbErr)
+		}
+		if _, dbErr := e.db.Exec(ctx, `UPDATE orders SET state = $2, updated_at = $3 WHERE id = $1 AND state = $4`, orderID, stateFailed, e.now().UTC(), stateMinting); dbErr != nil {
+			fmt.Printf("mark order %s FAILED failed: %v\n", orderID, dbErr)
+		}
+		e.changed(ctx, orderID)
+	}
+	if totalCents > maxOrderCents {
+		fail(map[string]any{"reason": "order total exceeds $300 cap at mint time", "total_cents": totalCents}, ErrBudgetExceeded)
+		return
+	}
+	rules := loadRainRules(ctx, e.db)
+	result, err := e.rain.createScopedCard(ctx, totalCents, rules, e.now())
+	if _, dbErr := e.db.Exec(ctx, `UPDATE card_attempts SET rain_card_id = $2, rain_request = $3, rain_response = $4 WHERE id = $1`, attemptID, result.CardID, result.Request, result.Response); dbErr != nil {
+		fmt.Printf("record mint evidence for order %s failed: %v\n", orderID, dbErr)
+	}
+	if err != nil {
+		if _, dbErr := e.db.Exec(ctx, `UPDATE orders SET state = $2, updated_at = $3 WHERE id = $1 AND state = $4`, orderID, stateFailed, e.now().UTC(), stateMinting); dbErr != nil {
+			fmt.Printf("mark order %s FAILED failed: %v\n", orderID, dbErr)
+		}
+		e.changed(ctx, orderID)
+		return
+	}
+	if _, dbErr := e.db.Exec(ctx, `UPDATE orders SET collateral_contract_id = $2, collateral_chain = $3 WHERE id = $1`, orderID, e.rain.collateralContractID, e.rain.collateralChain); dbErr != nil {
+		fmt.Printf("record collateral linkage for order %s failed: %v\n", orderID, dbErr)
+	}
+	if err := e.transition(ctx, orderID, stateMinting, stateSubmitting); err != nil {
+		fmt.Printf("transition order %s MINTING -> SUBMITTING failed: %v\n", orderID, err)
+	}
 }
 
 func (e *orderEngine) expiringOrderIDs(ctx context.Context, now time.Time) ([]string, error) {

@@ -266,7 +266,12 @@
     {
       "id": 7,
       "name": "Rain card minting + decline-proof capture",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "Order e7d11a09-4b98-4f7c-aa79-f6d3f1032c4d (total 938 cents) reached MINTING and the sweep minted Rain card c67dcbdd-8e1f-4c93-a681-2949096cd7a1; GET /v1/issuing/cards lists it active with limit.amount 1126 (= 1.2x938) and the stored request shows the admin rules (allowedMccs [5812,5814], expiresAt +30d) that Rain received.",
+        "card_attempts rows for both test orders contain the full request (method, url, body) and response (attempts[] with HTTP status and complete card JSON incl. encrypted PAN/CVC), verified via SQL against Railway Postgres.",
+        "After PUT /api/settings changed the rules to amountCapCents:500 + allowedMccs:[5812], order 7e133227-2504-436e-90af-5d3c1a339995 (same 938-cent total) minted card 76831931-6e68-44e3-bb3d-41bea8f1eff1 whose card object shows limit.amount 600 (= 1.2x500) versus 1126 before — an observable rule-driven difference; settings were reset to defaults afterwards."
+      ],
       "description": "Mint a Rain card for the final order total after grace; persist all evidence, since the decline is a demo feature. This is also where Rain agent-control-layer rules and the Monad angle live.",
       "tasks": [
         "Study https://rain-sandbox-trial.mintlify.site + the agent control layer post; implement Rain client: create card under RAIN_TEAM_ID/RAIN_USER_ID with COLLATERAL_CONTRACT_ID, spend limit = order total, MCC/merchant rules restricted to restaurants (allowedMccs per admin-panel client rules)",

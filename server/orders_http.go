@@ -20,13 +20,15 @@ func orderHandler(engine *orderEngine) http.HandlerFunc {
 			return
 		}
 		if len(parts) == 1 && parts[0] != "" && r.Method == http.MethodGet {
-			var state string
-			if err := engine.db.QueryRow(r.Context(), `SELECT state FROM orders WHERE id = $1`, parts[0]).Scan(&state); err != nil {
+			var state, contractID, chain string
+			if err := engine.db.QueryRow(r.Context(), `SELECT state, collateral_contract_id, collateral_chain FROM orders WHERE id = $1`, parts[0]).Scan(&state, &contractID, &chain); err != nil {
 				http.NotFound(w, r)
 				return
 			}
+			var cardID string
+			_ = engine.db.QueryRow(r.Context(), `SELECT rain_card_id FROM card_attempts WHERE order_id = $1 ORDER BY id DESC LIMIT 1`, parts[0]).Scan(&cardID)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"id": parts[0], "state": state})
+			json.NewEncoder(w).Encode(map[string]string{"id": parts[0], "state": state, "rain_card_id": cardID, "collateral_contract_id": contractID, "collateral_chain": chain})
 			return
 		}
 		if len(parts) == 1 && parts[0] == "" && r.Method == http.MethodPost {

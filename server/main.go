@@ -62,10 +62,16 @@ func main() {
 	http.HandleFunc("/internal/menu", menuHandler(csvSource, browserUseSource, os.Getenv("MENU_SOURCE")))
 	orders := &orderEngine{db: pool, now: time.Now}
 	orders.agents = agentSpawnerFromEnv(ctx)
+	if rain, err := rainClientFromEnv(); err != nil {
+		log.Printf("rain client disabled: %v", err)
+	} else {
+		orders.rain = rain
+	}
 	slack := slackFromEnv()
 	orders.notify = func(ctx context.Context, orderID string) { _ = orders.updateAnnouncement(ctx, orderID, slack) }
 	orders.startTicker(ctx)
 	http.HandleFunc("/internal/orders/", orderHandler(orders))
+	http.HandleFunc("/api/settings", settingsHandler(pool))
 	http.HandleFunc("/slack/commands", slackCommandHandler(orders, slack, os.Getenv("SLACK_SIGNING_SECRET"), os.Getenv("OPEN_ROUTER_KEY")))
 	log.Printf("orchestrator listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
