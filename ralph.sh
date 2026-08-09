@@ -4,7 +4,7 @@ set -u
 
 cd "$(dirname "$0")"
 
-MODEL="meta/muse-spark-1.2"
+MODEL="openrouter/meta/muse-spark-1.2"
 LOG_DIR="logs"
 MAX_RETRIES_PER_MILESTONE=5
 
@@ -126,7 +126,6 @@ while true; do
 
   update_ralph_md "$last_finished" "milestone $mid: $mname (iteration $iteration, attempt $((retries + 1)))"
   append_history "START iteration $iteration -> milestone $mid ($mname), attempt $((retries + 1))"
-  commit_and_push "ralph: start milestone $mid attempt $((retries + 1))"
 
   prompt="You are one iteration of the Ralph loop for this project.
 
@@ -171,7 +170,6 @@ Rules for this iteration:
   else
     # not completed: context window filled, crash, or verifications failed — retry same milestone
     append_history "RETRY milestone $mid (exit=$rc, not marked completed; attempt $((retries + 1)) logged to $log)"
-    commit_and_push "ralph: milestone $mid attempt $((retries + 1)) incomplete (exit=$rc)"
-    sleep 5
+    sleep 15
   fi
 done
