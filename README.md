@@ -1,26 +1,100 @@
-# Group Grub
+# Rain Check
 
-Slack-native agentic group food ordering. An admin runs `/begin-order` in Slack
-with participants, a total budget, and a restaurant. Each participant gets a DM
-from a dedicated AI agent (goose + z-ai/glm-5.2 via OpenRouter) that helps them
-build a sub-order within their fair share. When everyone confirms (or the timer
-expires, plus a 2-minute grace period), the orchestrator mints a Rain sandbox
-card, submits the order to the DoorDash Drive sandbox, and the payment is
-intentionally declined — the decline proof is captured and surfaced on the
-frontend.
+**A multi-agent spend layer over Rain's Agent Control Layer.**
+Built at the Raingentic Commerce Hackathon (Rain × Monad), NYC, August 2026 — Team 31.
 
-## Live system
+> The credential does not exist while the amount is still moving.
 
-| Piece                 | Where                                               | Notes                                                                       |
-| --------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- |
-| Orchestrator (Go)     | https://orchestrator-production-ef93.up.railway.app | `GET /healthz` returns ok                                                   |
-| Frontend (Vite/React) | https://frontend-production-8ae0d.up.railway.app    | built from `web/`                                                           |
-| Postgres              | Railway service `Postgres`                          | external access via TCP proxy `shortline.proxy.rlwy.net:22769`              |
-| Agent pods            | DigitalOcean k8s (3 nodes)                          | one Job per participant per order                                           |
-| Slack app             | `Group Grub` (`A0BPUB0BJ0Y`), org `E0BNWAG5A4V`     | workspace `hello rain xyz` (`T0BP3FGUGCU`), channel `#eats` (`C0BNXRJV3AS`) |
+A Rain scoped card is a single-agent primitive: one merchant, one amount, fixed in advance.
+Rain Check is the layer for what it can't express — several agents spending from one pool,
+reallocating budget between themselves while a clock runs, with the card minted only once
+they agree, for exactly the settled total, scoped to the merchant category, and retired by
+its first successful authorization.
 
-Railway project: `skillful-enjoyment` (`17b87956-a6e5-4dee-b0fc-21c383c922c2`),
-environment `production`, services `orchestrator`, `frontend`, `Postgres`.
+Swap lunch for a team's monthly spend and the machinery is identical: delegated spend across
+many actors under one hard cap, with intra-team reallocation.
+
+| | |
+|---|---|
+| **Live demo** | https://frontend-production-8ae0d.up.railway.app |
+| **Orchestrator** | https://orchestrator-production-ef93.up.railway.app |
+| **Tracks** | Best Use of Rain · General |
+
+---
+
+## How it works
+
+An admin opens an order in Slack with a budget, a restaurant and a timer. Each participant
+gets an isolated agent — one pod per person on Kubernetes — that negotiates their cart in a
+DM and holds them to their share. Go over and your agent asks the group rather than an admin;
+others release surplus, partial fills across several donors included. A Go orchestrator holds
+one invariant in integer cents, re-asserted on every commit:
+
+```
+every participant's spend  +  the unallocated pool  =  the admin's cap
+```
+
+At close (timer, plus a two-minute grace period) a checkout agent mints one scoped card for
+the settled total, runs the authorization lifecycle, and reconciles against Rain's balances.
+
+Slack and the web app are two clients of the same orchestrator and never talk to each other.
+Every state change fans out as a `chat.update` on the announcement and a full snapshot over
+a websocket.
+
+## What we found probing the Rain sandbox
+
+Three things the docs don't say, each of which changed the build.
+
+**The scoped card enforces its category, not its amount.** A card requested at `7340` cents
+reads back `limit {amount: 8808, frequency: "allTime"}` and still authorizes `8809`. So the
+dollar figure is held by our ledger, committed before we call issue. That is why a ledger
+exists at all.
+
+**A success consumes the card; a decline does not.** A successful authorization flips the card
+to `canceled`; a declined one leaves it `active`. So the guardrail beat has to run before the
+real charge. We learned this by burning a card.
+
+**The `sessionid` for scoped issuance is client-generated.** Not issued at a desk — RSA-OAEP
+over a random 32-hex secret against Rain's published key. This blocked us until we worked it out.
+
+## Which rules are whose
+
+The demo shows both, labelled, because the distinction is the honest part of the pitch.
+
+| Rule | Enforced by | Evidence |
+|---|---|---|
+| Merchant category `5814` | **Rain** | off-list returns `scoped_card_mcc_not_allowed`, with no `declineReason` in our request body |
+| Amount | **our ledger** | committed pre-issuance; Rain does not check it at authorization |
+
+## Verification
+
+`scripts/e2e.sh` drives the whole flow against the deployed stack: a signed slash command,
+real agent DM conversations, an over-budget negotiation, a modify-after-confirm, a participant
+who never confirms so the timer path fires, and a cart addition during grace.
+
+**26 hard assertions · passed twice back to back · zero API fallbacks · ~5 minutes per run.**
+
+## What we are not claiming
+
+- This is Rain's **api-dev sandbox**. Nothing here reaches a card network.
+- DoorDash Drive takes no card payment, so the **card leg and the delivery leg are separate
+  steps** the state machine sequences. The card did not pay DoorDash.
+- **There is no Monad in this build.** Rain's sandbox settles collateral on Sepolia, Fuji,
+  Solana Devnet, Amoy and Base Sepolia, and Monad isn't among them. We would rather say we
+  didn't use it than ship a decorative integration.
+- **No agent identity.** One credential is shared by the group; per-agent scoped cards is the
+  version we'd build next, and the ten-active-card ration is why we didn't this weekend.
+
+## Stack
+
+Go orchestrator + Postgres on Railway · Slack slash commands, DMs and a Block Kit announcement
+updated in place · one goose agent pod per participant on Kubernetes via OpenRouter ·
+browser-use menu scraping with a CSV fallback · React SPA with a websocket live view, past
+orders and an admin panel · `$300` ceiling enforced server-side.
+
+> The Slack app is registered as **Group Grub** — that's the bot; Rain Check is the product.
+
+---
 
 ## Running an order
 
@@ -62,8 +136,9 @@ In `#eats`:
 4. When **all confirm** or the **timer expires**, a 2-minute grace period starts
    (modifications still allowed; grace never extends).
 5. Then: a Rain card is minted (limit = 1.2× order total), the order is
-   submitted to the DoorDash Drive sandbox, the card **declines by design**, and
-   the decline proof is captured. The announcement ends with a link to the proof
+   submitted to the DoorDash Drive sandbox, the guardrail beat runs (an off-category
+   authorization that Rain declines itself), then the real charge settles, and the
+   proof is captured. The announcement ends with a link to the proof
    page.
 
 State machine:
