@@ -15,7 +15,7 @@
         "commerce"
       ],
       "goals": [
-        "First prize with Rain",
+        "First prize with Rain"
       ],
       "notes_for_judging": "Rain cards are dummy cards; orders will be DECLINED by design. Capturing and displaying proof of the attempted-then-declined transaction is a FEATURE (decline-proof page). DoorDash API is sandbox-only; no real orders occur."
     },
@@ -141,7 +141,13 @@
     {
       "id": 2,
       "name": "Data layer + CSV menu ingestion",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "Production deployment 5a7b9c68-d095-45b1-a76b-882fd48c85ac logged ingestion counts: rows_read=5000, latest_rows=3753, deleted_skipped=1077, malformed_rows=11, items_upserted=2676.",
+        "SQL check `SELECT count(*) FROM menu_items` against Railway Postgres returned 2676.",
+        "curl requests to the deployed `/internal/menu` endpoint for Subway and American Deli returned non-empty JSON item lists with integer price_cents values.",
+        "The idempotency verification redeployment 5a7b9c68-d095-45b1-a76b-882fd48c85ac succeeded after migrations had already run, and its startup log recorded a successful import with no migration error."
+      ],
       "description": "Postgres schema and ingestion of the Kaggle fallback dataset.",
       "tasks": [
         "Schema (migrations in ./server/migrations): restaurants, menu_items, orders (state, budget_cents, timer_deadline, grace_deadline, channel_id, restaurant, address), participants (slack_user_id, share_cents, confirmed_at), cart_items, admins (slack_user_id, can_create_orders), settings (rain client rules, delivery address), card_attempts (rain_card_id, amount_cents, doordash_request, doordash_response, declined_at)",

@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T03:50:55Z
-- last finished: milestone 0: Environment, tools, and credential verification
-- currently working on: ALL MILESTONES COMPLETE
+- updated: 2026-08-09T04:00:05Z
+- last finished: milestone 2: Data layer + CSV menu ingestion
+- currently working on: (nothing yet)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -26,3 +26,5 @@
 - 2026-08-09T03:50:00Z COMPLETE milestone 1: Postgres, orchestrator, and frontend are deployed and SUCCESS; public health and frontend checks returned 200.
 - 2026-08-09T03:50:40Z RETRY milestone 1 (exit=0, not marked completed; attempt 1 logged to logs/milestone-1-attempt-1.log)
 - 2026-08-09T03:50:55Z ALL MILESTONES COMPLETE
+- 2026-08-09T03:51:13Z START iteration 1 -> milestone 2 (Data layer + CSV menu ingestion), attempt 1
+- 2026-08-09T03:58:33Z COMPLETE milestone 2: migrations, CSV ingestion, SQL count, deployed menu endpoint, and idempotent rerun verified.
