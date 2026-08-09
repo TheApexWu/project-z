@@ -4,7 +4,12 @@ set -u
 
 cd "$(dirname "$0")"
 
-MODEL="openrouter/meta/muse-spark-1.2"
+ONCE=0
+if [ "${1:-}" = "--once" ]; then
+  ONCE=1
+fi
+
+MODEL="openrouter/openai/gpt-5.6-terra"
 LOG_DIR="logs"
 MAX_RETRIES_PER_MILESTONE=5
 
@@ -171,5 +176,10 @@ Rules for this iteration:
     # not completed: context window filled, crash, or verifications failed — retry same milestone
     append_history "RETRY milestone $mid (exit=$rc, not marked completed; attempt $((retries + 1)) logged to $log)"
     sleep 15
+  fi
+
+  if [ "$ONCE" -eq 1 ]; then
+    echo "--once requested: stopping after single iteration."
+    exit 0
   fi
 done

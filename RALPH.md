@@ -1,0 +1,15 @@
+# RALPH loop status
+
+- updated: 2026-08-09T03:27:06Z
+- last finished: (nothing yet)
+- currently working on: milestone 0: Environment, tools, and credential verification (iteration 1, attempt 1)
+
+## Iteration history
+- 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
+- 2026-08-09T03:25:32Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
+- 2026-08-09T03:25:33Z RETRY milestone 0 (exit=1, not marked completed; attempt 1 logged to logs/milestone-0-attempt-1.log)
+- 2026-08-09T03:25:50Z START iteration 2 -> milestone 0 (Environment, tools, and credential verification), attempt 2
+- 2026-08-09T03:25:51Z RETRY milestone 0 (exit=1, not marked completed; attempt 2 logged to logs/milestone-0-attempt-2.log)
+- 2026-08-09T03:27:06Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
+- 2026-08-08T00:00:00Z BLOCKED milestone 0: DoorDash JWT requests return 401 and Slack CLI local install does not expose the required static bot token or signing secret; see BLOCKED.md.
+- 2026-08-09T03:31:34Z BLOCKED on milestone 0 (see BLOCKED.md)
