@@ -16,3 +16,6 @@
 - 2026-08-09T03:38:59Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
 - 2026-08-09T04:00:00Z BLOCKED milestone 0: Slack app runtime credentials are absent from API_KEYS; see BLOCKED.md.
 - 2026-08-09T03:41:22Z BLOCKED on milestone 0 (see BLOCKED.md)
+- 2026-08-09T03:42:48Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
+- 2026-08-09T04:00:00Z BLOCKED milestone 0: `API_KEYS` lacks `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`; see BLOCKED.md.
+- 2026-08-09T03:43:31Z BLOCKED on milestone 0 (see BLOCKED.md)
