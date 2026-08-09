@@ -34,8 +34,9 @@ var (
 type clock func() time.Time
 
 type orderEngine struct {
-	db  *pgxpool.Pool
-	now clock
+	db     *pgxpool.Pool
+	now    clock
+	notify func(context.Context, string)
 }
 
 func newOrderID() (string, error) {
@@ -124,17 +125,50 @@ func (e *orderEngine) transition(ctx context.Context, id, from, to string) error
 	if command.RowsAffected() == 0 {
 		return fmt.Errorf("order %s is not in %s", id, from)
 	}
+	e.changed(ctx, id)
 	return nil
 }
 
 // tick reads persisted deadlines, so a replacement process resumes pending work.
 func (e *orderEngine) tick(ctx context.Context) error {
 	now := e.now().UTC()
+	ids, err := e.expiringOrderIDs(ctx, now)
+	if err != nil {
+		return err
+	}
 	if _, err := e.db.Exec(ctx, `UPDATE orders SET state = $1, grace_deadline = $2, updated_at = $3 WHERE state = $4 AND timer_deadline <= $3`, stateGrace, graceDeadline(now), now, stateCollecting); err != nil {
 		return err
 	}
-	_, err := e.db.Exec(ctx, `UPDATE orders SET state = $1, updated_at = $2 WHERE state = $3 AND grace_deadline <= $2`, stateMinting, now, stateGrace)
-	return err
+	if _, err := e.db.Exec(ctx, `UPDATE orders SET state = $1, updated_at = $2 WHERE state = $3 AND grace_deadline <= $2`, stateMinting, now, stateGrace); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		e.changed(ctx, id)
+	}
+	return nil
+}
+
+func (e *orderEngine) expiringOrderIDs(ctx context.Context, now time.Time) ([]string, error) {
+	rows, err := e.db.Query(ctx, `SELECT id FROM orders WHERE (state = $1 AND timer_deadline <= $3) OR (state = $2 AND grace_deadline <= $3)`, stateCollecting, stateGrace, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (e *orderEngine) changed(ctx context.Context, id string) {
+	if e.notify != nil {
+		go e.notify(context.Background(), id)
+	}
 }
 
 func (e *orderEngine) startTicker(ctx context.Context) {
@@ -193,7 +227,11 @@ func (e *orderEngine) addCartItem(ctx context.Context, orderID, slackUserID stri
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err == nil {
+		e.changed(ctx, orderID)
+	}
+	return err
 }
 
 func (e *orderEngine) confirm(ctx context.Context, orderID, slackUserID string) error {
@@ -226,7 +264,11 @@ func (e *orderEngine) confirm(ctx context.Context, orderID, slackUserID string) 
 			return err
 		}
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err == nil {
+		e.changed(ctx, orderID)
+	}
+	return err
 }
 
 func (e *orderEngine) unconfirm(ctx context.Context, orderID, slackUserID string) error {
@@ -237,6 +279,7 @@ func (e *orderEngine) unconfirm(ctx context.Context, orderID, slackUserID string
 	if command.RowsAffected() == 0 {
 		return ErrOrderLocked
 	}
+	e.changed(ctx, orderID)
 	return nil
 }
 
@@ -248,5 +291,6 @@ func (e *orderEngine) cancel(ctx context.Context, orderID string) error {
 	if command.RowsAffected() == 0 {
 		return errors.New("order cannot be cancelled")
 	}
+	e.changed(ctx, orderID)
 	return nil
 }

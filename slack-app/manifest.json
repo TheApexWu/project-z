@@ -20,7 +20,8 @@
       {
         "command": "/begin-order",
         "description": "Start a budgeted group food order",
-        "should_escape": false
+        "should_escape": false,
+        "url": "https://orchestrator-production-ef93.up.railway.app/slack/commands"
       }
     ]
   },

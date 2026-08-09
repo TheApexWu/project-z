@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T04:17:05Z
+- updated: 2026-08-09T04:17:06Z
 - last finished: milestone 4: Order state machine + budget engine (Go core)
-- currently working on: (between milestones)
+- currently working on: milestone 5: Slack integration (commands, announcement, DMs) (iteration 4, attempt 1)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -36,3 +36,6 @@
 - 2026-08-09T04:08:50Z START iteration 3 -> milestone 4 (Order state machine + budget engine (Go core)), attempt 1
 - 2026-08-09T04:15:00Z COMPLETE milestone 4: persisted deadline ticker and budget engine passed Go tests and a local mid-timer restart check.
 - 2026-08-09T04:17:05Z DONE milestone 4 (Order state machine + budget engine (Go core))
+- 2026-08-09T04:17:06Z START iteration 4 -> milestone 5 (Slack integration (commands, announcement, DMs)), attempt 1
+- 2026-08-09T04:20:17Z BLOCKED milestone 5: Slack enterprise app has no workspace grant and its token lacks app_configurations:write; see BLOCKED.md.
+- 2026-08-09T04:20:57Z BLOCKED on milestone 5 (see BLOCKED.md)
