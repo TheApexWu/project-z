@@ -1,17 +1,9 @@
 # Milestone 0 blocked
 
-Date: 2026-08-08
+## Missing Slack runtime credentials
 
-## DoorDash Drive authentication
+`Group Grub` app `A0BPUB0BJ0Y` is installed in `rain-hackathon-sand` and its remote manifest confirms `/begin-order` plus the required bot scopes. `slack auth list`, `slack app list`, and `slack manifest info --source remote --app A0BPUB0BJ0Y` all succeed.
 
-`API_KEYS` contains non-empty `DOORDASH_DEVELOPER_ID`, `DOORDASH_KEY_ID`, and `DOORDASH_SIGNING_SECRET`. I generated an HS256 JWT using the documented `DD-JWT-V1` header and `aud`, `iss`, `kid`, `iat`, and `exp` claims, then sent it as `Authorization: Bearer <jwt>` to `https://openapi.doordash.com/drive/v2/quotes` and `/drive/v2/deliveries/not-a-real-id`. Both returned HTTP 401: `The JWT is null, empty, or is just whitespaces`.
+The CLI-managed local installation does not expose a static bot OAuth token or request-signing secret. `API_KEYS` is missing the required `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`, so the preflight intentionally exits nonzero after all other checks pass.
 
-Human action required: verify that the three DoorDash sandbox credentials belong together and provide the correct Drive sandbox base URL or authentication requirements for this developer account.
-
-## Slack runtime credentials
-
-The Slack CLI successfully created and installed `Group Grub (local)` (app `A0BPUB0BJ0Y`) in workspace `hello rain xyz` (`T0BP3FGUGCU`). The installed app has `chat:write`, `im:write`, `commands`, `users:read`, and `channels:read`, and registered `/begin-order`.
-
-The CLI-managed local app starts through Socket Mode but does not expose a static bot OAuth token or signing secret. `API_KEYS` cannot be updated with the required `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` from this environment.
-
-Human action required: create or configure a conventional Slack API app from `slack-app/manifest.json`, install it to `hello rain xyz`, then add its bot OAuth token and signing secret to the ignored `API_KEYS` file as `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`.
+Human action required: open the Slack app settings for `A0BPUB0BJ0Y`, install/configure it as a conventional Slack API app if necessary, then add its bot user OAuth token (`xoxb-...`) as `SLACK_BOT_TOKEN` and its request signing secret as `SLACK_SIGNING_SECRET` to the ignored `API_KEYS` file. Re-run `./scripts/preflight.sh` afterward.
