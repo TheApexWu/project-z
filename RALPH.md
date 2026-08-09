@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T09:14:00Z
+- updated: 2026-08-09T09:13:35Z
 - last finished: milestone 7: Rain card minting + decline-proof capture
-- currently working on: milestone 8: DoorDash Drive sandbox submission + declined-order proof (iteration 3, attempt 1)
+- currently working on: (between milestones)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -49,3 +49,4 @@
 - 2026-08-09T08:31:13Z START iteration 3 -> milestone 7 (Rain card minting + decline-proof capture), attempt 1
 - 2026-08-09T09:14:00Z COMPLETE milestone 7: Rain scoped cards minted from MINTING sweep with admin rules; card_attempts holds full request/response; rule change (amountCapCents) observably altered the card limit (1126 vs 600); two SUBMITTING orders left as milestone 8 fixtures.
 - 2026-08-09T09:14:00Z DONE milestone 7 (Rain card minting + decline-proof capture)
+- 2026-08-09T09:13:35Z DONE milestone 7 (Rain card minting + decline-proof capture)
