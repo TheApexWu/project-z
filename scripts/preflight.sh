@@ -49,5 +49,7 @@ RAILWAY_CALLER=skill:use-railway@1.3.7 RAILWAY_AGENT_SESSION=railway-skill-m0-20
 [[ -n "${SLACK_BOT_TOKEN:-}" ]] || { printf 'missing required credential: SLACK_BOT_TOKEN\n' >&2; exit 1; }
 [[ -n "${SLACK_SIGNING_SECRET:-}" ]] || { printf 'missing required credential: SLACK_SIGNING_SECRET\n' >&2; exit 1; }
 slack auth list
-slack app list
+jq -e '.features.slash_commands[] | select(.command == "/begin-order")' slack-app/manifest.json >/dev/null
+jq -e '.oauth_config.scopes.bot | contains(["chat:write", "im:write", "commands", "users:read", "channels:read"])' slack-app/manifest.json >/dev/null
+slack api auth.test >/dev/null
 printf 'preflight passed\n'

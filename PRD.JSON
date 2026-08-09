@@ -85,7 +85,14 @@
     {
       "id": 0,
       "name": "Environment, tools, and credential verification",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "./scripts/preflight.sh completed successfully and printed preflight passed.",
+        "Rain and OpenRouter returned HTTP 200; DoorDash returned authenticated HTTP 404; Browser Use accepted a task with HTTP 200.",
+        "kubectl with the repository kubeconfig reported all three cluster nodes Ready.",
+        "The registry smoke push succeeded for registry.digitalocean.com/rainxyzhackathon2026/agent:smoke (sha256:196e32ba8482b4f0285d08b836d51944938d77acf30009a905834626e604d030).",
+        "The installed Group Grub bot authenticated with Slack, and slack-app/manifest.json declares /begin-order and the required bot scopes."
+      ],
       "description": "Prove every tool and credential works BEFORE building anything. Fix gaps found in preflight.",
       "tasks": [
         "Install kubectl; run `kubectl --kubeconfig k8s-1-36-0-do-0-ams3-1780491665629-kubeconfig.yaml get nodes` and confirm 3 Ready nodes",
