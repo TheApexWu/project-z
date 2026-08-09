@@ -210,7 +210,13 @@
     {
       "id": 5,
       "name": "Slack integration (commands, announcement, DMs)",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "Signed /begin-order for U0BNZQ7KR34 + U0BPU5GU6KS ($40, McDonald's, 15m) returned 'Group order started' and posted the Block Kit announcement (ts 1786261988.975629) in #eats C0BNXRJV3AS with restaurant, budget, ⏳ checklist, and COLLECTING status.",
+        "curl POST to /internal/orders/a499d5c6-b8e5-4294-a673-aab1d90beac5/participants/U0BNZQ7KR34/confirm returned 204 and conversations.replies showed '✅ <@U0BNZQ7KR34>' in the announcement 0.20s later.",
+        "conversations.history showed the intro DM from the bot in both participant DM channels (U0BNZQ7KR34=D0BNUA17R6F, U0BPU5GU6KS=D0BNK64LQF9).",
+        "A forged-signature POST to /slack/commands was rejected with HTTP 401 'invalid Slack signature'."
+      ],
       "description": "Slash command intake, announcement-menu message with live updates, and per-participant DM channels the agents will use.",
       "tasks": [
         "Handle /begin-order: parse users (@mentions), budget, restaurant name, optional timer (e.g. `/begin-order @a @b $40 McDonald's 15m`); agent-style lenient parsing — use glm-5.2 via OpenRouter to interpret free-form command text into structured {users, budget, restaurant, timer}",

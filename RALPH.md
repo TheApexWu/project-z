@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T04:17:06Z
-- last finished: milestone 4: Order state machine + budget engine (Go core)
-- currently working on: milestone 5: Slack integration (commands, announcement, DMs) (iteration 4, attempt 1)
+- updated: 2026-08-09T07:56:19Z
+- last finished: milestone 5: Slack integration (commands, announcement, DMs)
+- currently working on: (awaiting next iteration)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -39,3 +39,7 @@
 - 2026-08-09T04:17:06Z START iteration 4 -> milestone 5 (Slack integration (commands, announcement, DMs)), attempt 1
 - 2026-08-09T04:20:17Z BLOCKED milestone 5: Slack enterprise app has no workspace grant and its token lacks app_configurations:write; see BLOCKED.md.
 - 2026-08-09T04:20:57Z BLOCKED on milestone 5 (see BLOCKED.md)
+- 2026-08-09T07:45:11Z UNBLOCKED milestone 5: new org-install bot token in API_KEYS + Railway (auth.test ok), workspace grant confirmed via users.list?team_id=T0BP3FGUGCU, admins row seeded for U0BNXRCAQ3G, manifest fixed (socket_mode off, should_escape on, interactivity off, im:history added). See docs-notes/milestone-5.md.
+- 2026-08-09T07:46:55Z START iteration 1 -> milestone 5 (Slack integration (commands, announcement, DMs)), attempt 1
+- 2026-08-09T07:56:19Z COMPLETE milestone 5: live /begin-order posted the #eats announcement, curl confirm flipped the checklist in 0.20s, both DMs delivered, forged signature rejected 401; fixed Dockerfile CA certs and enabled the app Messages tab + channels:history.
+- 2026-08-09T07:56:19Z DONE milestone 5 (Slack integration (commands, announcement, DMs))

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "openrouter": {
+      "models": {
+        "moonshotai/kimi-k3": {
+          "options": {
+            "provider": {
+              "only": ["baseten/fp8"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

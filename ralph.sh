@@ -9,7 +9,9 @@ if [ "${1:-}" = "--once" ]; then
   ONCE=1
 fi
 
-MODEL="openrouter/openai/gpt-5.6-terra"
+# OpenRouter routing for this model is pinned to the baseten/fp8 endpoint in
+# ./opencode.json; the loop cd's here first, so opencode picks that config up.
+MODEL="openrouter/moonshotai/kimi-k3"
 LOG_DIR="logs"
 MAX_RETRIES_PER_MILESTONE=5
 
