@@ -16,7 +16,6 @@
       ],
       "goals": [
         "First prize with Rain",
-        "Bounty: Best Implementation of Monad"
       ],
       "notes_for_judging": "Rain cards are dummy cards; orders will be DECLINED by design. Capturing and displaying proof of the attempted-then-declined transaction is a FEATURE (decline-proof page). DoorDash API is sandbox-only; no real orders occur."
     },
@@ -117,7 +116,12 @@
     {
       "id": 1,
       "name": "Railway infrastructure provisioning",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "curl https://orchestrator-production-ef93.up.railway.app/healthz returned 200 with 'ok; database ping: succeeded'.",
+        "curl https://frontend-production-8ae0d.up.railway.app returned 200 and the Group Grub Vite placeholder HTML.",
+        "Railway production environment status reports Postgres, orchestrator, and frontend as SUCCESS."
+      ],
       "description": "Provision Postgres, the Go orchestrator service, and the frontend service on Railway project 17b87956-a6e5-4dee-b0fc-21c383c922c2.",
       "tasks": [
         "Deploy Postgres template via Railway MCP",

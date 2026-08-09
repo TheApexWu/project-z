@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T03:46:28Z
+- updated: 2026-08-09T03:50:55Z
 - last finished: milestone 0: Environment, tools, and credential verification
-- currently working on: (between milestones)
+- currently working on: ALL MILESTONES COMPLETE
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -22,3 +22,7 @@
 - 2026-08-09T03:44:39Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
 - 2026-08-09T04:15:00Z COMPLETE milestone 0: preflight passed; Kubernetes, external APIs, registry, Slack, and Railway verified.
 - 2026-08-09T03:46:28Z DONE milestone 0 (Environment, tools, and credential verification)
+- 2026-08-09T03:46:30Z START iteration 2 -> milestone 1 (Railway infrastructure provisioning), attempt 1
+- 2026-08-09T03:50:00Z COMPLETE milestone 1: Postgres, orchestrator, and frontend are deployed and SUCCESS; public health and frontend checks returned 200.
+- 2026-08-09T03:50:40Z RETRY milestone 1 (exit=0, not marked completed; attempt 1 logged to logs/milestone-1-attempt-1.log)
+- 2026-08-09T03:50:55Z ALL MILESTONES COMPLETE
