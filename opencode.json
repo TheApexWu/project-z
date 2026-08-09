@@ -6,7 +6,10 @@
         "moonshotai/kimi-k3": {
           "options": {
             "provider": {
-              "only": ["baseten/fp8"]
+              "only": [
+                "fireworks",
+                "wafer"
+              ]
             }
           }
         }

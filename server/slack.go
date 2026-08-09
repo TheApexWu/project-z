@@ -91,6 +91,39 @@ func (s slackClient) api(ctx context.Context, method string, input, output any) 
 	return nil
 }
 
+// get calls a Slack Web API method over GET (query params in `method`), for
+// endpoints like users.list that ignore JSON bodies with org tokens.
+func (s slackClient) get(ctx context.Context, method string, output any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://slack.com/api/"+method, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.token)
+	response, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	var result struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("Slack %s: %s", method, result.Error)
+	}
+	if output != nil {
+		return json.Unmarshal(data, output)
+	}
+	return nil
+}
+
 func parseBeginOrder(ctx context.Context, text, apiKey string) (beginOrder, error) {
 	parsed := parseBeginOrderLocally(text)
 	if apiKey == "" {

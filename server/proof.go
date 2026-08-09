@@ -15,11 +15,26 @@ import (
 func orderProofHandler(db *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/orders/"), "/")
-		if len(parts) != 2 || parts[0] == "" || parts[1] != "proof" || r.Method != http.MethodGet {
+		if r.Method != http.MethodGet || len(parts) == 0 || parts[0] == "" {
 			http.NotFound(w, r)
 			return
 		}
 		orderID := parts[0]
+		// GET /api/orders/{id} — live snapshot (same payload the websocket pushes).
+		if len(parts) == 1 {
+			snapshot, err := orderSnapshot(r.Context(), db, orderID)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(snapshot)
+			return
+		}
+		if len(parts) != 2 || parts[1] != "proof" {
+			http.NotFound(w, r)
+			return
+		}
 		var state, restaurant, contractID, chain string
 		var budget int
 		var createdAt, updatedAt time.Time

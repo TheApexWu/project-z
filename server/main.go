@@ -73,14 +73,38 @@ func main() {
 		orders.doordash = doordash
 	}
 	slack := slackFromEnv()
-	orders.notify = func(ctx context.Context, orderID string) { _ = orders.updateAnnouncement(ctx, orderID, slack) }
+	hub := newWSHub(pool)
+	orders.notify = func(ctx context.Context, orderID string) {
+		hub.broadcast(orderID)
+		_ = orders.updateAnnouncement(ctx, orderID, slack)
+	}
 	orders.startTicker(ctx)
 	http.HandleFunc("/internal/orders/", orderHandler(orders))
+	http.HandleFunc("/api/orders", orderListHandler(pool))
 	http.HandleFunc("/api/orders/", orderProofHandler(pool))
 	http.HandleFunc("/api/settings", settingsHandler(pool))
+	http.HandleFunc("/api/admins", adminsHandler(pool))
+	http.HandleFunc("/api/admins/", adminsHandler(pool))
+	http.HandleFunc("/api/slack/users", slackUsersHandler(slack))
+	http.HandleFunc("/ws", hub.handler)
 	http.HandleFunc("/slack/commands", slackCommandHandler(orders, slack, os.Getenv("SLACK_SIGNING_SECRET"), os.Getenv("OPEN_ROUTER_KEY")))
 	log.Printf("orchestrator listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, withCORS(http.DefaultServeMux)))
+}
+
+// withCORS lets the Railway-hosted SPA call the API cross-origin (Authorization
+// header included). No cookies are used, so a wildcard origin is acceptable here.
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func migrate(ctx context.Context, conn *pgx.Conn) error {

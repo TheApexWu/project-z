@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T09:53:42Z
-- last finished: milestone 8: DoorDash Drive sandbox submission + declined-order proof
-- currently working on: (between milestones)
+- updated: 2026-08-09T11:11:11Z
+- last finished: (nothing yet)
+- currently working on: milestone 9: Frontend: admin panel, past orders, live order websocket (iteration 1, attempt 1)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -54,3 +54,10 @@
 - 2026-08-09T09:55:00Z COMPLETE milestone 8: three orders CLOSED with DoorDash sandbox delivery ids + Rain decline evidence; announcement shows the final status line; /api/orders/{id}/proof live. See docs-notes/milestone-8.md.
 - 2026-08-09T09:55:00Z DONE milestone 8 (DoorDash Drive sandbox submission + declined-order proof)
 - 2026-08-09T09:53:42Z DONE milestone 8 (DoorDash Drive sandbox submission + declined-order proof)
+- 2026-08-09T09:53:46Z START iteration 5 -> milestone 9 (Frontend: admin panel, past orders, live order websocket), attempt 1
+- 2026-08-09T10:30:42Z START iteration 1 -> milestone 9 (Frontend: admin panel, past orders, live order websocket), attempt 1
+- 2026-08-09T11:04:02Z START iteration 1 -> milestone 9 (Frontend: admin panel, past orders, live order websocket), attempt 1
+- 2026-08-09T11:07:45Z START iteration 1 -> milestone 9 (Frontend: admin panel, past orders, live order websocket), attempt 1
+- 2026-08-09T11:11:11Z START iteration 1 -> milestone 9 (Frontend: admin panel, past orders, live order websocket), attempt 1
+- 2026-08-09T12:30:00Z COMPLETE milestone 9: admin API auth 401/200 verified, /ws pushed cart updates in ~50ms via scripts/ws-check.mjs, decline-proof JSON live on past-orders; fixed org-token users.list team_id 502 and redeployed orchestrator.
+- 2026-08-09T12:30:00Z DONE milestone 9 (Frontend: admin panel, past orders, live order websocket)
