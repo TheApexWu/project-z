@@ -1,13 +1,15 @@
 {
-  "name": "z-draft",
-  "version": "0.0.2",
+  "name": "lantern-order",
+  "version": "0.1.0",
   "type": "module",
-  "description": "Project Zarathustra prototype — measure, in dollars, what an agent's spend controls let slip through on x402/Monad.",
+  "description": "A group order under one hard budget, with intra-group budget trading, settled by a Rain scoped card that is minted only once the group has finished deciding.",
   "scripts": {
-    "start": "node run.mjs",
     "test": "node --test",
-    "live": "node --env-file=.env.local live.mjs",
-    "rain": "node --env-file=.env.local rain.mjs"
+    "gate": "node verify.mjs gate",
+    "status": "node verify.mjs status",
+    "preflight": "node --env-file=.env.local preflight.mjs",
+    "drive": "node --env-file=.env.local drive.mjs --live",
+    "serve": "node server.mjs"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.30.0",

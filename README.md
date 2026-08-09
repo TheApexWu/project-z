@@ -1,34 +1,61 @@
-# Project Zarathustra
+# Lantern Order
 
-**The gauge, not a firewall.** A dollar-weighted exposure gauge for agent payments: it measures, in dollars, how much a prompt-injected AI agent can spend while staying *inside* its spend policy — the residual that caps and allowlists can't see, because it's in-policy.
+A group order where several people spend under one hard budget, trade unused sub-budget with
+each other, and a checkout agent mints a **Rain scoped card for exactly the final total** once
+the group has finished deciding.
 
-Built on **Rain** (scoped agent cards) and **Monad** (x402 settlement). It doesn't block the agent economy; it prices its risk, so the controls that already ship know how much is exposed.
+> The card did not exist until the group finished deciding, was scoped to exactly what they
+> decided, only worked at that merchant, and died on contact.
 
-## The idea
-A scoped card blocks the obvious attack — a large charge to a stranger, over the cap, off the allowlist. It can't tell a legitimate $42 purchase from a prompt-injected $42 purchase to a *different merchant in the same allowed category*. That in-policy flip is invisible to a static control because it *is* in-policy. Zarathustra measures it:
+Built for the Raingentic Commerce Hackathon (Rain × Monad), NYC, August 2026.
 
-- a **policy gate** — the baseline: a Rain-style scoped card (amount + merchant-category + expiry);
-- an **evolutionary fuzzer** that finds the maximum-dollar in-policy bypass a gate waves through;
-- a **scorer** that ranks by `dollars-at-risk = frequency × dollars × reversibility` — FAIR / event-based "Cyber-VaR" — surfacing the rare-but-costly attack that binary success-rate benchmarks bury;
-- a tamper-evident **ledger** of every verdict.
+## The shape of it
 
-Tighten the cap and the attacker's take falls, but it converges to a **non-zero floor** — the residual a static rule can't close without also blocking honest buys — which is exactly where an intent-aware layer earns its place.
+An admin opens an order: a total budget, one merchant, a timer. Everyone gets an equal share by
+default. People add items through an agent; anyone who goes over their share can ask the group,
+and whoever has slack can give it up — partial fills across several donors are the interesting
+case, and the ledger holds the invariant that the group total never exceeds the admin's cap.
 
-## Two rails
-- **Rain — card sandbox** (`rain.mjs`, `src/rainsandbox.mjs`): issue a scoped agent card, run `authorize` → `settle`, and measure the in-policy flip on Rain's real sandbox API. Agents actually move money.
-- **Monad — x402** (`live.mjs`, `src/x402live.mjs`): settle a stablecoin payment on Monad testnet via EIP-3009, and measure the speculative-vs-final settlement window — the *reversibility* term, grounded in a real Monad number.
+When the timer expires the order closes and a checkout agent issues one Rain scoped card for the
+exact final total, bound to the merchant's category, and pays. A scripted incident triggers a
+partial authorization reversal, and the hold releases to the cent against Rain's own balances.
+Settlement fires one Monad transfer per person for their actual post-trade share.
 
-## Run
+The whole thing renders as a lantern-lit night market: each person is a spirit with a paper
+lantern that dims as they spend, budget trades are coins arcing between them, and the scoped
+card materializes as a spell card printing its real rules.
+
+Strip the art away and it is delegated spend under a hard guardrail with intra-group
+reallocation — the same shape as a departmental budget.
+
+## Running it
+
 ```
-node run.mjs      # the gauge — seeded, deterministic; prints the exposure figures
-node --test       # 48 tests, zero runtime dependencies
-```
-Live rails are opt-in and read credentials from a local, gitignored `.env.local`:
-```
-node --env-file=.env.local rain.mjs --check    # Rain sandbox preflight
-node --env-file=.env.local rain.mjs --demo     # scoped card -> authorize/settle -> the in-policy flip
-node --env-file=.env.local live.mjs --check    # Monad x402 preflight
+cp .env.example .env.local        # fill in the Rain sandbox credentials
+node --env-file=.env.local preflight.mjs    # prove the rail answers
+node --env-file=.env.local drive.mjs --live # the end-to-end run
+node server.mjs                              # then open http://localhost:8080
 ```
 
-## Requirements
-`PRD.json` holds the requirements and milestones for both rails, each with an exact verify command. The offline gauge is complete and deterministic (two runs reproduce the same ledger head); the live rails are wired against Rain's sandbox and Monad's testnet and block cleanly until credentials are provided. **Sandbox / testnet only — no real money moves.**
+The renderer also runs standalone against a canned event stream at
+`http://localhost:8080/?demo=1`, with no backend and no credentials.
+
+## Layout
+
+```
+shared/events.mjs     the contract between backend and renderer — change this first
+src/rain.mjs          Rain sandbox client; every field verified against the live API
+src/rainsession.mjs   client-side sessionid generation for scoped-card issuance
+src/order.mjs         order state machine, budget ledger, trading
+src/checkout.mjs      the finale: issue, decline, authorize, settle
+renderer/             the hanami show
+verify.mjs            the only gate — nothing is done unless this exits 0
+PRD.json / prompt.md  the autonomous build loop's spec and execution guide
+```
+
+## A note on what we claim
+
+Rain's scoped card enforces its merchant-category allowlist; it does not enforce its amount at
+authorization. So the guardrail we demonstrate is the category decline, which is Rain's own
+decision and not one we induced, and the dollar figure on the spell card is the group ledger's
+arithmetic. Everything in `evidence/` came off the wire on a real call. Sandbox only.

@@ -1,0 +1,14 @@
+{
+  "ranAt": "2026-08-09T01:01:57.844Z",
+  "live": true,
+  "spendingPower": 529303,
+  "cardId": "2d318df1-02af-4104-bc16-c034bbef79e8",
+  "last4": "9779",
+  "capCents": 500,
+  "approvedTxId": "db4ace67-1a66-4478-a15e-4056d2ae8109",
+  "declinedTxId": "233a0bde-27e6-4967-a3d3-822613a59cac",
+  "declinedReason": "card_spending_limit_exceeded",
+  "forcedDecline": false,
+  "spendingPowerBefore": 529803,
+  "spendingPowerAfter": 529303
+}
