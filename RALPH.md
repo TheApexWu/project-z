@@ -1,7 +1,7 @@
 # RALPH loop status
 
-- updated: 2026-08-09T04:00:50Z
-- last finished: milestone 2: Data layer + CSV menu ingestion
+- updated: 2026-08-09T04:08:00Z
+- last finished: milestone 3: browser-use stealth menu scraping spike (with CSV fallback wiring)
 - currently working on: (between milestones)
 
 ## Iteration history
@@ -29,3 +29,6 @@
 - 2026-08-09T03:51:13Z START iteration 1 -> milestone 2 (Data layer + CSV menu ingestion), attempt 1
 - 2026-08-09T03:58:33Z COMPLETE milestone 2: migrations, CSV ingestion, SQL count, deployed menu endpoint, and idempotent rerun verified.
 - 2026-08-09T04:00:50Z DONE milestone 2 (Data layer + CSV menu ingestion)
+- 2026-08-09T04:00:52Z START iteration 2 -> milestone 3 (browser-use stealth menu scraping spike (with CSV fallback wiring)), attempt 1
+- 2026-08-09: Browser Use DoorDash spike failed: McDonald's and Burger King runs both timed out at 90s. `MENU_SOURCE` defaults to CSV, and Browser Use errors fall back to CSV; see `docs-notes/browseruse-spike.md`.
+- 2026-08-09T04:08:00Z COMPLETE milestone 3: deployed Browser Use/CSV sources, proved error fallback, and recorded the failed DoorDash stealth spike verdict.

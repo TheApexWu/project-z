@@ -47,7 +47,13 @@ func main() {
 	}
 
 	http.HandleFunc("/healthz", healthz)
-	http.HandleFunc("/internal/menu", menuHandler(databaseURL))
+	csvSource := menu.CsvSource{DatabaseURL: databaseURL}
+	browserUseSource := menu.BrowserUseSource{
+		APIKey:          os.Getenv("BROWSER_USER_API_KEY"),
+		DeliveryAddress: os.Getenv("BROWSER_USE_DELIVERY_ADDRESS"),
+		DatabaseURL:     databaseURL,
+	}
+	http.HandleFunc("/internal/menu", menuHandler(csvSource, browserUseSource, os.Getenv("MENU_SOURCE")))
 	log.Printf("orchestrator listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
@@ -72,59 +78,41 @@ func migrate(ctx context.Context, conn *pgx.Conn) error {
 	return nil
 }
 
-func menuHandler(databaseURL string) http.HandlerFunc {
-	type item struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		PriceCents  int    `json:"price_cents"`
-		Category    string `json:"category"`
-	}
+func menuHandler(csvSource menu.MenuSource, browserUseSource menu.MenuSource, configuredSource string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := strings.TrimSpace(r.URL.Query().Get("restaurant"))
 		if query == "" {
 			http.Error(w, "restaurant is required", http.StatusBadRequest)
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		conn, err := pgx.Connect(ctx, databaseURL)
-		if err != nil {
-			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
-			return
+		source := configuredSource
+		if requested := r.URL.Query().Get("source"); requested == "browseruse" || requested == "csv" {
+			source = requested
 		}
-		defer conn.Close(ctx)
-		const normalized = "regexp_replace(lower(r.name), '[^a-z0-9]+', '', 'g')"
-		var restaurant string
-		err = conn.QueryRow(ctx, "WITH query AS (SELECT regexp_replace(lower($1), '[^a-z0-9]+', '', 'g') AS name) SELECT r.name FROM restaurants r CROSS JOIN query q WHERE "+normalized+" LIKE '%' || q.name || '%' OR q.name LIKE '%' || "+normalized+" || '%' ORDER BY CASE WHEN "+normalized+" = q.name THEN 0 WHEN "+normalized+" LIKE '%' || q.name || '%' THEN 1 ELSE 2 END, length(r.name) LIMIT 1", query).Scan(&restaurant)
+		if source == "browseruse" {
+			scrapeCtx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+			result, err := browserUseSource.Menu(scrapeCtx, query)
+			cancel()
+			if err == nil {
+				writeMenu(w, result)
+				return
+			}
+			log.Printf("browser-use menu lookup failed; falling back to CSV: %v", err)
+		}
+		csvCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		result, err := csvSource.Menu(csvCtx, query)
 		if err != nil {
 			http.Error(w, "restaurant not found", http.StatusNotFound)
 			return
 		}
-		rows, err := conn.Query(ctx, `SELECT mi.name, mi.description, mi.price_cents, mi.category FROM menu_items mi JOIN restaurants r ON r.id = mi.restaurant_id WHERE r.name = $1 ORDER BY mi.category, mi.name`, restaurant)
-		if err != nil {
-			http.Error(w, "query menu: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
-		items := []item{}
-		for rows.Next() {
-			var i item
-			if err := rows.Scan(&i.Name, &i.Description, &i.PriceCents, &i.Category); err != nil {
-				http.Error(w, "read menu: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			items = append(items, i)
-		}
-		if err := rows.Err(); err != nil {
-			http.Error(w, "read menu: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(struct {
-			Restaurant string `json:"restaurant"`
-			Items      []item `json:"items"`
-		}{restaurant, items})
+		writeMenu(w, result)
 	}
+}
+
+func writeMenu(w http.ResponseWriter, result menu.Result) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {

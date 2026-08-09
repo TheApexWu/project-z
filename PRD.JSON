@@ -165,7 +165,12 @@
     {
       "id": 3,
       "name": "browser-use stealth menu scraping spike (with CSV fallback wiring)",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "The conditional live-source verification is not applicable: two DoorDash Browser Use V4 runs (McDonald's and Burger King) both reached the enforced 90-second timeout without a menu result; the documented verdict is CSV-only.",
+        "`env -u GOROOT go test ./...` passed the injected Browser Use network-error fallback test, and deployed `GET /internal/menu?restaurant=Subway&source=browseruse` returned non-empty CSV items with integer cent prices.",
+        "`docs-notes/browseruse-spike.md` records both run IDs, 90-second latencies, the unsupported grok-4.5 403, and the permanent CSV fallback verdict."
+      ],
       "description": "Test the hypothesis: browser-use Stealth Mode can pull live DoorDash menu items for a SPECIFIC restaurant location. If yes, make it a menu source; if no, permanently use CSV fallback.",
       "tasks": [
         "Using browser-use cloud API with stealth/proxy options per docs, create a task: navigate DoorDash, set delivery address to the configured admin address, open a named restaurant's store page, extract structured menu (name, description, price, category) as JSON",
