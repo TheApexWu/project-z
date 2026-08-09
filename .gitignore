@@ -2,3 +2,4 @@ API_KEYS
 docker-config
 k8s*
 logs/
+node_modules
