@@ -88,6 +88,7 @@ func main() {
 	http.HandleFunc("/api/slack/users", slackUsersHandler(slack))
 	http.HandleFunc("/ws", hub.handler)
 	http.HandleFunc("/slack/commands", slackCommandHandler(orders, slack, os.Getenv("SLACK_SIGNING_SECRET"), os.Getenv("OPEN_ROUTER_KEY")))
+	http.HandleFunc("/slack/interactivity", slackInteractivityHandler(orders, os.Getenv("SLACK_SIGNING_SECRET")))
 	log.Printf("orchestrator listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, withCORS(http.DefaultServeMux)))
 }

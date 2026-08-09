@@ -40,7 +40,8 @@
   },
   "settings": {
     "interactivity": {
-      "is_enabled": false
+      "is_enabled": true,
+      "request_url": "https://orchestrator-production-ef93.up.railway.app/slack/interactivity"
     },
     "org_deploy_enabled": true,
     "socket_mode_enabled": false,

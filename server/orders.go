@@ -192,6 +192,15 @@ func (e *orderEngine) mintOutstanding(ctx context.Context) error {
 		return err
 	}
 	for _, job := range jobs {
+		if job.total <= 0 {
+			// Nothing was ordered: there is no card to mint, so close as
+			// CANCELLED rather than attempting a $0 Rain call and landing FAILED.
+			if _, err := e.db.Exec(ctx, `UPDATE orders SET state = $2, updated_at = $3 WHERE id = $1 AND state = $4`, job.orderID, stateCancelled, e.now().UTC(), stateMinting); err != nil {
+				return err
+			}
+			e.changed(ctx, job.orderID)
+			continue
+		}
 		var attemptID int64
 		if err := e.db.QueryRow(ctx, `INSERT INTO card_attempts (order_id, amount_cents) VALUES ($1, $2) RETURNING id`, job.orderID, job.total).Scan(&attemptID); err != nil {
 			return err
@@ -575,6 +584,24 @@ func (e *orderEngine) unconfirm(ctx context.Context, orderID, slackUserID string
 	}
 	if command.RowsAffected() == 0 {
 		return ErrOrderLocked
+	}
+	e.changed(ctx, orderID)
+	return nil
+}
+
+// forceEnd closes a live order immediately, skipping the 2-minute grace period.
+// It routes through GRACE with an already-expired deadline so the 1s ticker moves
+// the order to MINTING on the existing tested path; a direct COLLECTING->MINTING
+// transition is not in the valid-transition table. This intentionally bypasses
+// the PRD's always-apply-grace rule as an explicit product decision (admin-only
+// Slack button).
+func (e *orderEngine) forceEnd(ctx context.Context, orderID string) error {
+	command, err := e.db.Exec(ctx, `UPDATE orders SET state = CASE WHEN state = $2 THEN $3 ELSE state END, grace_deadline = $4, updated_at = $4 WHERE id = $1 AND state IN ($2, $3)`, orderID, stateCollecting, stateGrace, e.now().UTC())
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return errors.New("order cannot be force-ended")
 	}
 	e.changed(ctx, orderID)
 	return nil

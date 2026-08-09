@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -28,5 +29,37 @@ func TestForgedSlackSignatureRejected(t *testing.T) {
 	validNow := time.Unix(1775736000, 0)
 	if !verifySlackRequest("secret", stamp, signature, body, validNow) {
 		t.Fatal("valid Slack signature was rejected")
+	}
+}
+
+func TestParseInteractivityPayload(t *testing.T) {
+	raw := `{"type":"block_actions","response_url":"https://hooks.slack.com/actions/x","user":{"id":"U0ADMIN"},"actions":[{"action_id":"end_order","value":"order-123"}]}`
+	payload, err := parseInteractivityPayload(url.Values{"payload": {raw}})
+	if err != nil || payload.User.ID != "U0ADMIN" || payload.Actions[0].Value != "order-123" || payload.ResponseURL == "" {
+		t.Fatalf("payload = %#v, err = %v", payload, err)
+	}
+	for _, bad := range []string{
+		`{"type":"view_submission","user":{"id":"U1"},"actions":[{"action_id":"end_order","value":"o"}]}`,
+		`{"type":"block_actions","user":{"id":"U1"},"actions":[{"action_id":"other","value":"o"}]}`,
+		`{"type":"block_actions","user":{"id":"U1"}}`,
+		`not json`,
+	} {
+		if _, err := parseInteractivityPayload(url.Values{"payload": {bad}}); err == nil {
+			t.Fatalf("accepted unsupported payload: %s", bad)
+		}
+	}
+}
+
+func TestEndOrderBlockShape(t *testing.T) {
+	block := endOrderBlock("order-123")
+	if block["type"] != "actions" {
+		t.Fatalf("block type = %v", block["type"])
+	}
+	button := block["elements"].([]map[string]any)[0]
+	if button["action_id"] != "end_order" || button["value"] != "order-123" || button["style"] != "danger" {
+		t.Fatalf("button = %#v", button)
+	}
+	if button["confirm"] == nil {
+		t.Fatal("danger button has no confirm dialog")
 	}
 }

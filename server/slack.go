@@ -126,9 +126,14 @@ func (s slackClient) get(ctx context.Context, method string, output any) error {
 
 func parseBeginOrder(ctx context.Context, text, apiKey string) (beginOrder, error) {
 	parsed := parseBeginOrderLocally(text)
-	if apiKey == "" {
+	complete := len(parsed.Users) > 0 && parsed.BudgetCents > 0 && parsed.Restaurant != ""
+	if apiKey == "" || complete {
 		return parsed, nil
 	}
+	// Slack kills slash commands that don't respond within ~3s, and this call
+	// has been observed at 10s+; keep the LLM fallback well under the limit.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	prompt := "Interpret this Slack group-food-order command. Return JSON only with users (Slack user IDs), budget_cents (integer), restaurant (string), and timer (Go duration such as 15m). Preserve user IDs exactly. Command: " + text
 	payload := map[string]any{"model": "z-ai/glm-5.2", "messages": []map[string]string{{"role": "user", "content": prompt}}, "response_format": map[string]string{"type": "json_object"}}
 	body, err := json.Marshal(payload)
@@ -223,9 +228,9 @@ func slackCommandHandler(engine *orderEngine, client slackClient, signingSecret,
 		if err == nil {
 			err = timerErr
 		}
-		if err == nil && (len(order.Users) == 0 || order.Restaurant == "") {
-			err = errors.New("include at least one @user, a dollar budget, and restaurant")
-		}
+	if err == nil && (len(order.Users) == 0 || order.BudgetCents <= 0 || order.Restaurant == "") {
+		err = errors.New("include at least one @user, a dollar budget, and restaurant")
+	}
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"response_type": "ephemeral", "text": "Could not start order: " + err.Error()})
@@ -247,6 +252,97 @@ func slackCommandHandler(engine *orderEngine, client slackClient, signingSecret,
 func logSlackError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"response_type": "ephemeral", "text": "Could not start order: " + err.Error()})
+}
+
+func endOrderBlock(orderID string) map[string]any {
+	return map[string]any{
+		"type": "actions",
+		"elements": []map[string]any{{
+			"type":      "button",
+			"text":      map[string]string{"type": "plain_text", "text": "End order now"},
+			"style":     "danger",
+			"action_id": "end_order",
+			"value":     orderID,
+			"confirm": map[string]any{
+				"title":   map[string]string{"type": "plain_text", "text": "End this order?"},
+				"text":    map[string]string{"type": "mrkdwn", "text": "This ends the order *immediately* for everyone — no 2-minute grace period. The Rain card mints and the DoorDash sandbox submission runs right away."},
+				"confirm": map[string]string{"type": "plain_text", "text": "End now"},
+				"deny":    map[string]string{"type": "plain_text", "text": "Keep ordering"},
+				"style":   "danger",
+			},
+		}},
+	}
+}
+
+type interactivityPayload struct {
+	Type        string `json:"type"`
+	ResponseURL string `json:"response_url"`
+	User        struct {
+		ID string `json:"id"`
+	} `json:"user"`
+	Actions []struct {
+		ActionID string `json:"action_id"`
+		Value    string `json:"value"`
+	} `json:"actions"`
+}
+
+func parseInteractivityPayload(form url.Values) (interactivityPayload, error) {
+	var payload interactivityPayload
+	if err := json.Unmarshal([]byte(form.Get("payload")), &payload); err != nil {
+		return payload, err
+	}
+	if payload.Type != "block_actions" || len(payload.Actions) == 0 || payload.Actions[0].ActionID != "end_order" {
+		return payload, errors.New("unsupported interaction")
+	}
+	return payload, nil
+}
+
+func postEphemeral(responseURL, text string) {
+	body, err := json.Marshal(map[string]string{"response_type": "ephemeral", "text": text})
+	if err != nil {
+		return
+	}
+	req, err := http.NewRequest(http.MethodPost, responseURL, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if response, err := http.DefaultClient.Do(req); err == nil {
+		response.Body.Close()
+	}
+}
+
+func slackInteractivityHandler(engine *orderEngine, signingSecret string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil || !verifySlackRequest(signingSecret, r.Header.Get("X-Slack-Request-Timestamp"), r.Header.Get("X-Slack-Signature"), body, time.Now()) {
+			http.Error(w, "invalid Slack signature", http.StatusUnauthorized)
+			return
+		}
+		form, err := url.ParseQuery(string(body))
+		if err != nil {
+			http.Error(w, "bad payload", http.StatusBadRequest)
+			return
+		}
+		payload, err := parseInteractivityPayload(form)
+		if err != nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		var allowed bool
+		if err := engine.db.QueryRow(r.Context(), `SELECT can_create_orders FROM admins WHERE slack_user_id = $1`, payload.User.ID).Scan(&allowed); err != nil || !allowed {
+			postEphemeral(payload.ResponseURL, "Only Group Grub admins can end an order.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if err := engine.forceEnd(r.Context(), payload.Actions[0].Value); err != nil {
+			postEphemeral(payload.ResponseURL, "This order has already closed.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		postEphemeral(payload.ResponseURL, "Order ending now — no grace period. Card minting and DoorDash submission follow.")
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func slackFromEnv() slackClient {
@@ -378,6 +474,9 @@ func (e *orderEngine) announcementBlocks(ctx context.Context, orderID string) ([
 		{"type": "section", "fields": []map[string]string{{"type": "mrkdwn", "text": "*Restaurant*\n" + restaurant}, {"type": "mrkdwn", "text": fmt.Sprintf("*Budget*\n$%.2f", float64(budget)/100)}}},
 		{"type": "section", "text": map[string]string{"type": "mrkdwn", "text": "*Participants*\n" + strings.Join(checklist, "\n")}},
 		{"type": "context", "elements": []map[string]string{{"type": "mrkdwn", "text": contextText}}},
+	}
+	if state == stateCollecting || state == stateGrace {
+		blocks = append(blocks, endOrderBlock(orderID))
 	}
 	if statusDetail != "" {
 		if state == stateDeclinedProofCaptured || state == stateClosed {
