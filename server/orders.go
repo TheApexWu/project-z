@@ -37,6 +37,7 @@ type orderEngine struct {
 	db     *pgxpool.Pool
 	now    clock
 	notify func(context.Context, string)
+	agents *agentSpawner
 }
 
 func newOrderID() (string, error) {
@@ -232,6 +233,75 @@ func (e *orderEngine) addCartItem(ctx context.Context, orderID, slackUserID stri
 		e.changed(ctx, orderID)
 	}
 	return err
+}
+
+type cartItem struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	PriceCent int    `json:"price_cents"`
+	Quantity  int    `json:"quantity"`
+}
+
+func (e *orderEngine) participantID(ctx context.Context, orderID, slackUserID string) (int64, error) {
+	var id int64
+	err := e.db.QueryRow(ctx, `SELECT id FROM participants WHERE order_id = $1 AND slack_user_id = $2`, orderID, slackUserID).Scan(&id)
+	return id, err
+}
+
+func (e *orderEngine) getCart(ctx context.Context, orderID, slackUserID string) ([]cartItem, int, error) {
+	participantID, err := e.participantID(ctx, orderID, slackUserID)
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := e.db.Query(ctx, `SELECT id, name, price_cents, quantity FROM cart_items WHERE participant_id = $1 ORDER BY id`, participantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := []cartItem{}
+	total := 0
+	for rows.Next() {
+		var item cartItem
+		if err := rows.Scan(&item.ID, &item.Name, &item.PriceCent, &item.Quantity); err != nil {
+			return nil, 0, err
+		}
+		total += item.PriceCent * item.Quantity
+		items = append(items, item)
+	}
+	return items, total, rows.Err()
+}
+
+func (e *orderEngine) removeCartItem(ctx context.Context, orderID, slackUserID, name string) error {
+	tx, err := e.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var participantID int64
+	var state string
+	if err := tx.QueryRow(ctx, `SELECT p.id, o.state
+		FROM participants p JOIN orders o ON o.id = p.order_id
+		WHERE p.order_id = $1 AND p.slack_user_id = $2 FOR UPDATE OF p, o`, orderID, slackUserID).Scan(&participantID, &state); err != nil {
+		return err
+	}
+	if state != stateCollecting && state != stateGrace {
+		return ErrOrderLocked
+	}
+	command, err := tx.Exec(ctx, `DELETE FROM cart_items WHERE participant_id = $1 AND lower(name) = lower($2)`, participantID, name)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return errors.New("item not in cart")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE participants SET confirmed_at = NULL WHERE id = $1`, participantID); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	e.changed(ctx, orderID)
+	return nil
 }
 
 func (e *orderEngine) confirm(ctx context.Context, orderID, slackUserID string) error {

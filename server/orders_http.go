@@ -49,11 +49,54 @@ func orderHandler(engine *orderEngine) http.HandlerFunc {
 			json.NewEncoder(w).Encode(map[string]string{"id": id})
 			return
 		}
-		if len(parts) != 4 || parts[1] != "participants" || r.Method != http.MethodPost {
+		if len(parts) == 5 && parts[1] == "participants" && parts[3] == "cart" && parts[4] == "remove" && r.Method == http.MethodPost {
+			var input struct {
+				Name string `json:"name"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Name == "" {
+				http.Error(w, "name is required", http.StatusBadRequest)
+				return
+			}
+			writeParticipantAction(w, engine.removeCartItem(r.Context(), parts[0], parts[2], input.Name))
+			return
+		}
+		if len(parts) != 4 || parts[1] != "participants" {
 			http.NotFound(w, r)
 			return
 		}
 		orderID, slackUserID, action := parts[0], parts[2], parts[3]
+		if r.Method == http.MethodGet {
+			switch action {
+			case "cart":
+				items, total, err := engine.getCart(r.Context(), orderID, slackUserID)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]any{"items": items, "total_cents": total})
+			case "budget":
+				var share int
+				if err := engine.db.QueryRow(r.Context(), `SELECT share_cents FROM participants WHERE order_id = $1 AND slack_user_id = $2`, orderID, slackUserID).Scan(&share); err != nil {
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
+				}
+				_, total, err := engine.getCart(r.Context(), orderID, slackUserID)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]int{"share_cents": share, "cart_total_cents": total, "remaining_cents": share - total})
+			default:
+				http.NotFound(w, r)
+			}
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
 		var err error
 		switch action {
 		case "confirm":
@@ -74,14 +117,18 @@ func orderHandler(engine *orderEngine) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		if err != nil {
-			status := http.StatusBadRequest
-			if errors.Is(err, ErrOrderLocked) {
-				status = http.StatusConflict
-			}
-			http.Error(w, err.Error(), status)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		writeParticipantAction(w, err)
 	}
+}
+
+func writeParticipantAction(w http.ResponseWriter, err error) {
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, ErrOrderLocked) {
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

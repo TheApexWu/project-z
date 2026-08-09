@@ -14,6 +14,7 @@ import (
 )
 
 type Item struct {
+	ID          int64  `json:"id,omitempty"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	PriceCents  int    `json:"price_cents"`
@@ -45,7 +46,7 @@ func (s CsvSource) Menu(ctx context.Context, query string) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("find restaurant: %w", err)
 	}
-	rows, err := conn.Query(ctx, `SELECT mi.name, mi.description, mi.price_cents, mi.category FROM menu_items mi JOIN restaurants r ON r.id = mi.restaurant_id WHERE r.name = $1 ORDER BY mi.category, mi.name`, restaurant)
+	rows, err := conn.Query(ctx, `SELECT mi.id, mi.name, mi.description, mi.price_cents, mi.category FROM menu_items mi JOIN restaurants r ON r.id = mi.restaurant_id WHERE r.name = $1 ORDER BY mi.category, mi.name`, restaurant)
 	if err != nil {
 		return Result{}, fmt.Errorf("query menu: %w", err)
 	}
@@ -53,7 +54,7 @@ func (s CsvSource) Menu(ctx context.Context, query string) (Result, error) {
 	result := Result{Restaurant: restaurant, Items: []Item{}}
 	for rows.Next() {
 		var item Item
-		if err := rows.Scan(&item.Name, &item.Description, &item.PriceCents, &item.Category); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.PriceCents, &item.Category); err != nil {
 			return Result{}, fmt.Errorf("read menu: %w", err)
 		}
 		result.Items = append(result.Items, item)

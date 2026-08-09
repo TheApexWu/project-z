@@ -61,6 +61,7 @@ func main() {
 	}
 	http.HandleFunc("/internal/menu", menuHandler(csvSource, browserUseSource, os.Getenv("MENU_SOURCE")))
 	orders := &orderEngine{db: pool, now: time.Now}
+	orders.agents = agentSpawnerFromEnv(ctx)
 	slack := slackFromEnv()
 	orders.notify = func(ctx context.Context, orderID string) { _ = orders.updateAnnouncement(ctx, orderID, slack) }
 	orders.startTicker(ctx)

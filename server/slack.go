@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -226,6 +227,10 @@ func (e *orderEngine) attachSlack(ctx context.Context, orderID, channelID string
 	if _, err := e.db.Exec(ctx, `UPDATE orders SET channel_id = $2 WHERE id = $1`, orderID, channelID); err != nil {
 		return err
 	}
+	var restaurant string
+	if err := e.db.QueryRow(ctx, `SELECT restaurant FROM orders WHERE id = $1`, orderID).Scan(&restaurant); err != nil {
+		return err
+	}
 	var posted struct {
 		TS string `json:"ts"`
 	}
@@ -239,32 +244,54 @@ func (e *orderEngine) attachSlack(ctx context.Context, orderID, channelID string
 	if _, err := e.db.Exec(ctx, `UPDATE orders SET announcement_ts = $2 WHERE id = $1`, orderID, posted.TS); err != nil {
 		return err
 	}
-	rows, err := e.db.Query(ctx, `SELECT slack_user_id FROM participants WHERE order_id = $1`, orderID)
+	rows, err := e.db.Query(ctx, `SELECT slack_user_id, share_cents FROM participants WHERE order_id = $1`, orderID)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	type participantDM struct {
+		userID string
+		share  int
+	}
+	var participantList []participantDM
 	for rows.Next() {
-		var userID string
-		if err := rows.Scan(&userID); err != nil {
+		var p participantDM
+		if err := rows.Scan(&p.userID, &p.share); err != nil {
+			rows.Close()
 			return err
 		}
+		participantList = append(participantList, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, p := range participantList {
 		var dm struct {
 			Channel struct {
 				ID string `json:"id"`
 			} `json:"channel"`
 		}
-		if err := client.api(ctx, "conversations.open", map[string]string{"users": userID}, &dm); err != nil {
+		if err := client.api(ctx, "conversations.open", map[string]string{"users": p.userID}, &dm); err != nil {
 			return err
 		}
-		if _, err := e.db.Exec(ctx, `UPDATE participants SET dm_channel_id = $3 WHERE order_id = $1 AND slack_user_id = $2`, orderID, userID, dm.Channel.ID); err != nil {
+		if _, err := e.db.Exec(ctx, `UPDATE participants SET dm_channel_id = $3 WHERE order_id = $1 AND slack_user_id = $2`, orderID, p.userID, dm.Channel.ID); err != nil {
 			return err
 		}
 		if err := client.api(ctx, "chat.postMessage", map[string]string{"channel": dm.Channel.ID, "text": "A Group Grub order is open. Your ordering assistant will help you build an order within your share."}, nil); err != nil {
 			return err
 		}
+		if e.agents != nil {
+			// async: kubectl apply must not blow Slack's 3s command ack window
+			go func(userID, dmID string, share int) {
+				spawnCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				defer cancel()
+				if err := e.agents.spawn(spawnCtx, orderID, userID, dmID, share, restaurant); err != nil {
+					log.Printf("spawn agent for %s on order %s failed: %v", userID, orderID, err)
+				}
+			}(p.userID, dm.Channel.ID, p.share)
+		}
 	}
-	return rows.Err()
+	return nil
 }
 
 func (e *orderEngine) announcementBlocks(ctx context.Context, orderID string) ([]map[string]any, error) {
