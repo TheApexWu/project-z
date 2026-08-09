@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T04:00:05Z
+- updated: 2026-08-09T04:00:50Z
 - last finished: milestone 2: Data layer + CSV menu ingestion
-- currently working on: (nothing yet)
+- currently working on: (between milestones)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -28,3 +28,4 @@
 - 2026-08-09T03:50:55Z ALL MILESTONES COMPLETE
 - 2026-08-09T03:51:13Z START iteration 1 -> milestone 2 (Data layer + CSV menu ingestion), attempt 1
 - 2026-08-09T03:58:33Z COMPLETE milestone 2: migrations, CSV ingestion, SQL count, deployed menu endpoint, and idempotent rerun verified.
+- 2026-08-09T04:00:50Z DONE milestone 2 (Data layer + CSV menu ingestion)
