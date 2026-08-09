@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T04:15:00Z
+- updated: 2026-08-09T04:17:05Z
 - last finished: milestone 4: Order state machine + budget engine (Go core)
-- currently working on: none
+- currently working on: (between milestones)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -35,3 +35,4 @@
 - 2026-08-09T04:08:48Z DONE milestone 3 (browser-use stealth menu scraping spike (with CSV fallback wiring))
 - 2026-08-09T04:08:50Z START iteration 3 -> milestone 4 (Order state machine + budget engine (Go core)), attempt 1
 - 2026-08-09T04:15:00Z COMPLETE milestone 4: persisted deadline ticker and budget engine passed Go tests and a local mid-timer restart check.
+- 2026-08-09T04:17:05Z DONE milestone 4 (Order state machine + budget engine (Go core))
