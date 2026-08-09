@@ -35,11 +35,12 @@ var (
 type clock func() time.Time
 
 type orderEngine struct {
-	db     *pgxpool.Pool
-	now    clock
-	notify func(context.Context, string)
-	agents *agentSpawner
-	rain   *rainClient
+	db       *pgxpool.Pool
+	now      clock
+	notify   func(context.Context, string)
+	agents   *agentSpawner
+	rain     *rainClient
+	doordash *doordashClient
 }
 
 func newOrderID() (string, error) {
@@ -148,6 +149,9 @@ func (e *orderEngine) tick(ctx context.Context) error {
 	if err := e.mintOutstanding(ctx); err != nil {
 		return err
 	}
+	if err := e.submitOutstanding(ctx); err != nil {
+		return err
+	}
 	for _, id := range ids {
 		e.changed(ctx, id)
 	}
@@ -236,6 +240,140 @@ func (e *orderEngine) mintOrder(ctx context.Context, orderID string, attemptID i
 	if err := e.transition(ctx, orderID, stateMinting, stateSubmitting); err != nil {
 		fmt.Printf("transition order %s MINTING -> SUBMITTING failed: %v\n", orderID, err)
 	}
+}
+
+// submitOutstanding claims every SUBMITTING order whose latest card attempt
+// has a minted card but no DoorDash submission yet. The UPDATE is the claim:
+// it only succeeds while doordash_request is still empty.
+func (e *orderEngine) submitOutstanding(ctx context.Context) error {
+	if e.rain == nil || e.doordash == nil {
+		return nil
+	}
+	rows, err := e.db.Query(ctx, `SELECT o.id, ca.id, ca.rain_card_id, ca.amount_cents
+		FROM orders o
+		JOIN LATERAL (SELECT id, rain_card_id, amount_cents, doordash_request FROM card_attempts WHERE order_id = o.id ORDER BY id DESC LIMIT 1) ca ON true
+		WHERE o.state = $1 AND ca.rain_card_id <> '' AND ca.doordash_request = '{}'::jsonb`, stateSubmitting)
+	if err != nil {
+		return err
+	}
+	type submitJob struct {
+		orderID   string
+		attemptID int64
+		cardID    string
+		total     int
+	}
+	var jobs []submitJob
+	for rows.Next() {
+		var job submitJob
+		if err := rows.Scan(&job.orderID, &job.attemptID, &job.cardID, &job.total); err != nil {
+			rows.Close()
+			return err
+		}
+		jobs = append(jobs, job)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		claim := map[string]any{"claimed_at": e.now().UTC().Format(time.RFC3339)}
+		command, err := e.db.Exec(ctx, `UPDATE card_attempts SET doordash_request = $2 WHERE id = $1 AND doordash_request = '{}'::jsonb`, job.attemptID, claim)
+		if err != nil {
+			return err
+		}
+		if command.RowsAffected() == 1 {
+			go e.submitOrder(context.Background(), job.orderID, job.attemptID, job.cardID, job.total)
+		}
+	}
+	return nil
+}
+
+// submitOrder runs in a goroutine after the claim: DoorDash Drive sandbox
+// quote -> accept, then the intentional Rain decline as the payment leg.
+func (e *orderEngine) submitOrder(ctx context.Context, orderID string, attemptID int64, cardID string, totalCents int) {
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	fail := func(stage string, err error) {
+		if _, dbErr := e.db.Exec(ctx, `UPDATE card_attempts SET doordash_response = doordash_response || $2::jsonb WHERE id = $1`, attemptID, map[string]any{"error": stage + ": " + err.Error()}); dbErr != nil {
+			fmt.Printf("record submit failure for order %s failed: %v\n", orderID, dbErr)
+		}
+		if _, dbErr := e.db.Exec(ctx, `UPDATE orders SET state = $2, updated_at = $3 WHERE id = $1 AND state = $4`, orderID, stateFailed, e.now().UTC(), stateSubmitting); dbErr != nil {
+			fmt.Printf("mark order %s FAILED failed: %v\n", orderID, dbErr)
+		}
+		e.changed(ctx, orderID)
+	}
+
+	var restaurant string
+	if err := e.db.QueryRow(ctx, `SELECT restaurant FROM orders WHERE id = $1`, orderID).Scan(&restaurant); err != nil {
+		fail("load order", err)
+		return
+	}
+	dropoff := "1 Hackathon Way, San Francisco, CA 94105"
+	_ = e.db.QueryRow(ctx, `SELECT delivery_address FROM settings WHERE id = true AND delivery_address <> ''`).Scan(&dropoff)
+	pickup := restaurantAddress(ctx, e.db, restaurant)
+	if pickup == "" {
+		pickup = doordashFallbackPickupAddress
+	}
+	items := []map[string]any{}
+	itemRows, err := e.db.Query(ctx, `SELECT ci.name, SUM(ci.quantity), ci.price_cents
+		FROM cart_items ci JOIN participants p ON p.id = ci.participant_id
+		WHERE p.order_id = $1 GROUP BY ci.name, ci.price_cents ORDER BY ci.name`, orderID)
+	if err != nil {
+		fail("load cart items", err)
+		return
+	}
+	defer itemRows.Close()
+	for itemRows.Next() {
+		var name string
+		var quantity, price int
+		if err := itemRows.Scan(&name, &quantity, &price); err != nil {
+			fail("read cart items", err)
+			return
+		}
+		items = append(items, map[string]any{"name": name, "quantity": quantity, "price": price})
+	}
+
+	deliveryID := "gg-" + orderID
+	drive, err := e.doordash.submitDelivery(ctx, deliveryID, restaurant, pickup, dropoff, totalCents, items)
+	drive.Response["payment_path"] = "rain_simulated_authorization"
+	drive.Response["payment_note"] = "Drive sandbox cannot take a raw card payment; the DoorDash charge is simulated as a Rain authorization against the minted card, which declines by design (dummy card)."
+	if _, dbErr := e.db.Exec(ctx, `UPDATE card_attempts SET doordash_request = $2, doordash_response = $3, doordash_delivery_id = $4 WHERE id = $1`, attemptID, drive.Request, drive.Response, drive.DeliveryID); dbErr != nil {
+		fmt.Printf("record doordash evidence for order %s failed: %v\n", orderID, dbErr)
+	}
+	if err != nil {
+		fail("doordash submit", err)
+		return
+	}
+
+	payReq, payResp, err := e.rain.simulateAuthorization(ctx, cardID, totalCents, "DoorDash - "+restaurant)
+	drive.Response["payment"] = map[string]any{"path": "rain_simulated_authorization", "request": payReq, "response": payResp}
+	declinedAt := e.now().UTC()
+	if _, dbErr := e.db.Exec(ctx, `UPDATE card_attempts SET doordash_response = $2, payment_path = $3, declined_at = $4 WHERE id = $1`, attemptID, drive.Response, "rain_simulated_authorization", declinedAt); dbErr != nil {
+		fmt.Printf("record decline evidence for order %s failed: %v\n", orderID, dbErr)
+	}
+	if err != nil {
+		fail("rain authorization", err)
+		return
+	}
+	if err := e.transition(ctx, orderID, stateSubmitting, stateDeclinedProofCaptured); err != nil {
+		fmt.Printf("transition order %s SUBMITTING -> DECLINED_PROOF_CAPTURED failed: %v\n", orderID, err)
+		return
+	}
+	if err := e.transition(ctx, orderID, stateDeclinedProofCaptured, stateClosed); err != nil {
+		fmt.Printf("transition order %s DECLINED_PROOF_CAPTURED -> CLOSED failed: %v\n", orderID, err)
+	}
+}
+
+// restaurantAddress fuzzy-matches the order's restaurant name to the CSV
+// restaurants table (same normalization as the menu endpoint).
+func restaurantAddress(ctx context.Context, db *pgxpool.Pool, query string) string {
+	const normalized = "regexp_replace(lower(r.name), '[^a-z0-9]+', '', 'g')"
+	var address string
+	err := db.QueryRow(ctx, "WITH query AS (SELECT regexp_replace(lower($1), '[^a-z0-9]+', '', 'g') AS name) SELECT r.address FROM restaurants r CROSS JOIN query q WHERE "+normalized+" LIKE '%' || q.name || '%' OR q.name LIKE '%' || "+normalized+" || '%' ORDER BY CASE WHEN "+normalized+" = q.name THEN 0 WHEN "+normalized+" LIKE '%' || q.name || '%' THEN 1 ELSE 2 END, length(r.name) LIMIT 1", query).Scan(&address)
+	if err != nil {
+		return ""
+	}
+	return address
 }
 
 func (e *orderEngine) expiringOrderIDs(ctx context.Context, now time.Time) ([]string, error) {

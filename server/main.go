@@ -67,10 +67,16 @@ func main() {
 	} else {
 		orders.rain = rain
 	}
+	if doordash, err := doordashClientFromEnv(); err != nil {
+		log.Printf("doordash client disabled: %v", err)
+	} else {
+		orders.doordash = doordash
+	}
 	slack := slackFromEnv()
 	orders.notify = func(ctx context.Context, orderID string) { _ = orders.updateAnnouncement(ctx, orderID, slack) }
 	orders.startTicker(ctx)
 	http.HandleFunc("/internal/orders/", orderHandler(orders))
+	http.HandleFunc("/api/orders/", orderProofHandler(pool))
 	http.HandleFunc("/api/settings", settingsHandler(pool))
 	http.HandleFunc("/slack/commands", slackCommandHandler(orders, slack, os.Getenv("SLACK_SIGNING_SECRET"), os.Getenv("OPEN_ROUTER_KEY")))
 	log.Printf("orchestrator listening on :%s", port)

@@ -291,7 +291,13 @@
     {
       "id": 8,
       "name": "DoorDash Drive sandbox submission + declined-order proof",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "Orders e7d11a09-4b98-4f7c-aa79-f6d3f1032c4d, 7e133227-2504-436e-90af-5d3c1a339995, and 8a2ba264-2f75-411e-9b67-791415ee9afc all reached CLOSED with DoorDash sandbox delivery ids gg-<order_id> recorded in card_attempts.doordash_delivery_id; GET /drive/v2/deliveries/gg-8a2ba264-... returned 200 delivery_status=created.",
+        "card_attempts.doordash_response is non-empty for all three orders: quote_attempts (including the distance_too_long 422 and fallback-pickup retry), accept_attempts, tracking_url, and payment with the Rain decline (status=declined, declinedReason=account_credit_limit_exceeded, transactionId present); declined_at is set.",
+        "Slack announcement ts 1786268602.963489 in #eats shows the final status line '💳 Card minted → 🛵 order submitted → ❌ declined (by design) — see proof page' plus the proof URL, with Status: CLOSED.",
+        "GET /api/orders/8a2ba264-2f75-411e-9b67-791415ee9afc/proof returned 200 with structured evidence (state CLOSED, total 938, card f09507ba-be09-414d-b7d6-54f842870db0, delivery id, payment_path rain_simulated_authorization, full request/response JSON)."
+      ],
       "description": "Submit the composed group order through DoorDash Drive sandbox with the minted card; capture the decline as proof.",
       "tasks": [
         "Implement Drive client (JWT auth from milestone 0): create delivery/quote → accept → submit, using admin-panel delivery address and the aggregated cart as items metadata",

@@ -221,6 +221,69 @@ func (c *rainClient) createScopedCardOnce(ctx context.Context, url string, reque
 	return card.ID, nil
 }
 
+// simulateAuthorization charges the minted card as "DoorDash" via Rain's
+// sandbox authorization simulation. Drive sandbox cannot take a raw card
+// payment, so this leg produces the real (intentional) DECLINE event:
+// declineReason is always sent because dummy cards must decline by design.
+func (c *rainClient) simulateAuthorization(ctx context.Context, cardID string, amountCents int, merchantName string) (map[string]any, map[string]any, error) {
+	url := c.baseURL + "/simulate/transactions/authorize"
+	requestBody := map[string]any{
+		"cardId":                cardID,
+		"amount":                amountCents,
+		"currency":              "USD",
+		"merchantName":          merchantName,
+		"merchantCategoryCode":  "5812",
+		"declineReason":         "account_credit_limit_exceeded",
+	}
+	request := map[string]any{"method": http.MethodPost, "url": url, "body": requestBody}
+	response := map[string]any{"attempts": []rainAttempt{}}
+	attempts := []rainAttempt{}
+	var lastErr error
+	for try := 0; try < 2; try++ {
+		attempt := rainAttempt{At: time.Now().UTC()}
+		attempts = append(attempts, attempt)
+		payload, err := json.Marshal(requestBody)
+		if err == nil {
+			var req *http.Request
+			req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+			if err == nil {
+				req.Header.Set("Api-Key", c.apiKey)
+				req.Header.Set("Content-Type", "application/json")
+				var resp *http.Response
+				resp, err = c.http.Do(req)
+				if err == nil {
+					var body []byte
+					body, err = io.ReadAll(resp.Body)
+					resp.Body.Close()
+					attempt.Status = resp.StatusCode
+					if json.Valid(body) {
+						attempt.Body = json.RawMessage(body)
+					} else if len(body) > 0 {
+						attempt.Body, _ = json.Marshal(string(body))
+					}
+					if err == nil && resp.StatusCode/100 == 2 {
+						attempts[len(attempts)-1] = attempt
+						response["attempts"] = attempts
+						return request, response, nil
+					}
+					if err == nil {
+						err = &rainAPIError{status: resp.StatusCode, body: string(body)}
+					}
+				}
+			}
+		}
+		attempt.Error = err.Error()
+		attempts[len(attempts)-1] = attempt
+		response["attempts"] = attempts
+		lastErr = err
+		var apiErr *rainAPIError
+		if errors.As(err, &apiErr) && apiErr.status < 500 {
+			break // 4xx is definitive
+		}
+	}
+	return request, response, lastErr
+}
+
 // loadRainRules overlays settings.rain_client_rules onto the defaults.
 // Explicitly empty allowedMccs means "no MCC restriction"; explicit 0
 // expiresInDays means "no expiry".

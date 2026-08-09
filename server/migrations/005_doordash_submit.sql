@@ -1,0 +1,2 @@
+ALTER TABLE card_attempts ADD COLUMN IF NOT EXISTS doordash_delivery_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE card_attempts ADD COLUMN IF NOT EXISTS payment_path TEXT NOT NULL DEFAULT '';

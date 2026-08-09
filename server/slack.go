@@ -322,13 +322,39 @@ func (e *orderEngine) announcementBlocks(ctx context.Context, orderID string) ([
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	deadlineText := fmt.Sprintf("<!date^%d^{relative}|%s>", deadline.Unix(), deadline.Format(time.RFC822))
-	return []map[string]any{
+	statusDetail := ""
+	switch state {
+	case stateMinting:
+		statusDetail = "💳 Minting Rain card…"
+	case stateSubmitting:
+		statusDetail = "💳 Card minted → 🛵 submitting order to DoorDash…"
+	case stateDeclinedProofCaptured, stateClosed:
+		statusDetail = "💳 Card minted → 🛵 order submitted → ❌ declined (by design) — see proof page"
+	case stateFailed:
+		statusDetail = "⚠️ Order failed — evidence recorded"
+	case stateCancelled:
+		statusDetail = "🚫 Order cancelled"
+	}
+	contextText := "*Status:* " + state
+	if state == stateOpen || state == stateCollecting || state == stateGrace {
+		deadlineText := fmt.Sprintf("<!date^%d^{relative}|%s>", deadline.Unix(), deadline.Format(time.RFC822))
+		contextText += " | *Deadline:* " + deadlineText
+	}
+	blocks := []map[string]any{
 		{"type": "header", "text": map[string]string{"type": "plain_text", "text": "Group Grub order"}},
 		{"type": "section", "fields": []map[string]string{{"type": "mrkdwn", "text": "*Restaurant*\n" + restaurant}, {"type": "mrkdwn", "text": fmt.Sprintf("*Budget*\n$%.2f", float64(budget)/100)}}},
 		{"type": "section", "text": map[string]string{"type": "mrkdwn", "text": "*Participants*\n" + strings.Join(checklist, "\n")}},
-		{"type": "context", "elements": []map[string]string{{"type": "mrkdwn", "text": "*Status:* " + state + " | *Deadline:* " + deadlineText}}},
-	}, nil
+		{"type": "context", "elements": []map[string]string{{"type": "mrkdwn", "text": contextText}}},
+	}
+	if statusDetail != "" {
+		if state == stateDeclinedProofCaptured || state == stateClosed {
+			if base := os.Getenv("ORCHESTRATOR_PUBLIC_URL"); base != "" {
+				statusDetail += "\nProof: " + base + "/api/orders/" + orderID + "/proof"
+			}
+		}
+		blocks = append(blocks, map[string]any{"type": "section", "text": map[string]string{"type": "mrkdwn", "text": statusDetail}})
+	}
+	return blocks, nil
 }
 
 func (e *orderEngine) updateAnnouncement(ctx context.Context, orderID string, client slackClient) error {
