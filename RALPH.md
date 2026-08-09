@@ -1,8 +1,8 @@
 # RALPH loop status
 
-- updated: 2026-08-09T07:56:19Z
+- updated: 2026-08-09T07:57:45Z
 - last finished: milestone 5: Slack integration (commands, announcement, DMs)
-- currently working on: (awaiting next iteration)
+- currently working on: (between milestones)
 
 ## Iteration history
 - 2026-08-09T03:21:20Z START iteration 1 -> milestone 0 (Environment, tools, and credential verification), attempt 1
@@ -43,3 +43,4 @@
 - 2026-08-09T07:46:55Z START iteration 1 -> milestone 5 (Slack integration (commands, announcement, DMs)), attempt 1
 - 2026-08-09T07:56:19Z COMPLETE milestone 5: live /begin-order posted the #eats announcement, curl confirm flipped the checklist in 0.20s, both DMs delivered, forged signature rejected 401; fixed Dockerfile CA certs and enabled the app Messages tab + channels:history.
 - 2026-08-09T07:56:19Z DONE milestone 5 (Slack integration (commands, announcement, DMs))
+- 2026-08-09T07:57:45Z DONE milestone 5 (Slack integration (commands, announcement, DMs))
