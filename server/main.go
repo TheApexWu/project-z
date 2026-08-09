@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"group-grub/server/menu"
 )
 
@@ -38,6 +39,11 @@ func main() {
 	if err := migrate(ctx, conn); err != nil {
 		log.Fatal(err)
 	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pool.Close()
 	if csvPath := os.Getenv("MENU_CSV_PATH"); csvPath != "" {
 		stats, err := menu.Import(ctx, conn, csvPath)
 		if err != nil {
@@ -54,6 +60,9 @@ func main() {
 		DatabaseURL:     databaseURL,
 	}
 	http.HandleFunc("/internal/menu", menuHandler(csvSource, browserUseSource, os.Getenv("MENU_SOURCE")))
+	orders := &orderEngine{db: pool, now: time.Now}
+	orders.startTicker(ctx)
+	http.HandleFunc("/internal/orders/", orderHandler(orders))
 	log.Printf("orchestrator listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

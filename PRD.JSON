@@ -187,7 +187,11 @@
     {
       "id": 4,
       "name": "Order state machine + budget engine (Go core)",
-      "completed": false,
+      "completed": true,
+      "evidence": [
+        "`env -u GOROOT go test ./...` passed, including focused state-transition, budget split/cap, injected grace-deadline, and cart-over-budget tests.",
+        "Local restart-resilience check created order 0181c5e2-1959-437e-85a8-3c1069a50ffd with a 1-minute timer, killed and restarted the server mid-timer, then observed GRACE and MINTING at the persisted deadlines."
+      ],
       "description": "The heart of the orchestrator. This IS the code worth testing across loop runs.",
       "tasks": [
         "Implement states OPEN → COLLECTING → GRACE → MINTING → SUBMITTING → DECLINED_PROOF_CAPTURED → CLOSED, plus CANCELLED; transitions triggered by: all-confirmed, timer expiry, grace expiry",

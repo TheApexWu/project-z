@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
 
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY,
-    state TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('OPEN', 'COLLECTING', 'GRACE', 'MINTING', 'SUBMITTING', 'DECLINED_PROOF_CAPTURED', 'CLOSED', 'CANCELLED')),
     budget_cents INTEGER NOT NULL CHECK (budget_cents >= 0 AND budget_cents <= 30000),
     timer_deadline TIMESTAMPTZ,
     grace_deadline TIMESTAMPTZ,
